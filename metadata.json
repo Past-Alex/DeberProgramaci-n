@@ -1,0 +1,6 @@
+{
+  "name": "Rastreador de Hábitos",
+  "description": "Un rastreador de hábitos minimalista y elegante.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
