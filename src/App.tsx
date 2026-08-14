@@ -15,32 +15,10 @@ import { Plus, Sparkles, LayoutDashboard, ListTodo, BarChart3, LogOut, Download,
 type Tab = 'today' | 'habits' | 'stats' | 'templates' | 'blog';
 
 export default function App() {
-  const [currentUser, setCurrentUser] = useState<User | null>(() => {
-    const saved = localStorage.getItem('aesthetic-user');
-    if (saved) return JSON.parse(saved);
-    return null;
-  });
-
-  const [habits, setHabits] = useState<Habit[]>(() => {
-    const saved = localStorage.getItem('aesthetic-habits');
-    if (saved) return JSON.parse(saved);
-    return [];
-  });
-  
-  const [templates, setTemplates] = useState<HabitTemplate[]>(() => {
-    const saved = localStorage.getItem('aesthetic-templates');
-    if (saved) return JSON.parse(saved);
-    return [];
-  });
-
-  const [blogPosts, setBlogPosts] = useState<BlogPost[]>(() => {
-    const saved = localStorage.getItem('aesthetic-blog');
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      return parsed.length > 0 ? parsed : DEFAULT_BLOG_POSTS;
-    }
-    return DEFAULT_BLOG_POSTS;
-  });
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [habits, setHabits] = useState<Habit[]>([]);
+  const [templates, setTemplates] = useState<HabitTemplate[]>([]);
+  const [blogPosts, setBlogPosts] = useState<BlogPost[]>(DEFAULT_BLOG_POSTS);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>('today');
@@ -54,20 +32,44 @@ export default function App() {
   const [habitToDelete, setHabitToDelete] = useState<string | null>(null);
   const [postToDelete, setPostToDelete] = useState<string | null>(null);
 
+  const [isLoaded, setIsLoaded] = useState(false);
+
   useEffect(() => {
+    const savedUser = localStorage.getItem('aesthetic-user');
+    if (savedUser) setCurrentUser(JSON.parse(savedUser));
+    
+    const savedHabits = localStorage.getItem('aesthetic-habits');
+    if (savedHabits) setHabits(JSON.parse(savedHabits));
+    
+    const savedTemplates = localStorage.getItem('aesthetic-templates');
+    if (savedTemplates) setTemplates(JSON.parse(savedTemplates));
+    
+    const savedBlog = localStorage.getItem('aesthetic-blog');
+    if (savedBlog) {
+      const parsed = JSON.parse(savedBlog);
+      if (parsed.length > 0) setBlogPosts(parsed);
+    }
+    
+    setIsLoaded(true);
+  }, []);
+
+  useEffect(() => {
+    if (!isLoaded) return;
     if (currentUser) {
       localStorage.setItem('aesthetic-user', JSON.stringify(currentUser));
     } else {
       localStorage.removeItem('aesthetic-user');
     }
-  }, [currentUser]);
+  }, [currentUser, isLoaded]);
 
   useEffect(() => {
+    if (!isLoaded) return;
     localStorage.setItem('aesthetic-habits', JSON.stringify(habits));
-  }, [habits]);
-  
+  }, [habits, isLoaded]);
+
   // Keep templates in sync for the user view if coach added them
   useEffect(() => {
+    if (!isLoaded) return;
     const handleStorageChange = () => {
       const savedTemplates = localStorage.getItem('aesthetic-templates');
       if (savedTemplates) setTemplates(JSON.parse(savedTemplates));
@@ -77,11 +79,15 @@ export default function App() {
     };
     window.addEventListener('storage', handleStorageChange);
     return () => window.removeEventListener('storage', handleStorageChange);
-  }, []);
+  }, [isLoaded]);
 
   const handleLogout = () => {
     setCurrentUser(null);
   };
+
+  if (!isLoaded) {
+    return null;
+  }
 
   if (!currentUser) {
     return <LoginPage onLogin={setCurrentUser} />;
