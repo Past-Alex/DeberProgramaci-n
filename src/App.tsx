@@ -1,3 +1,4 @@
+"use client";
 import React, { useState, useEffect } from 'react';
 import { BlogPost, Habit, HabitColor, User, HabitTemplate } from './types';
 import { HabitCard } from './components/HabitCard';

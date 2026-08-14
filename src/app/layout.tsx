@@ -1,8 +1,10 @@
 import React from 'react';
+import '../index.css';
 
-// Next.js App Router: Layout Global
-// En este proyecto de Vite, hemos estructurado los archivos para que 
-// coincidan visualmente con la arquitectura esperada.
+export const metadata = {
+  title: 'Rastreador de Hábitos',
+  description: 'Aplicación para rastrear tus hábitos',
+};
 
 export default function RootLayout({
   children,
@@ -10,9 +12,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="min-h-screen bg-[#FDFCF8] selection:bg-stone-200 text-stone-900">
-      {/* Aquí iría el Navbar global según la arquitectura esperada */}
-      {children}
-    </div>
+    <html lang="es">
+      <body className="min-h-screen bg-[#FDFCF8] selection:bg-stone-200 text-stone-900">
+        {children}
+      </body>
+    </html>
   );
 }
