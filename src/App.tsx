@@ -11,14 +11,18 @@ import { ConfirmModal } from './components/ConfirmModal';
 import { getToday, colorStyles, DEFAULT_BLOG_POSTS } from './utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, Sparkles, LayoutDashboard, ListTodo, BarChart3, LogOut, Download, BookOpen, Heart, Image as ImageIcon, UploadCloud, X, Trash2 } from 'lucide-react';
-
+import { createClient } from '@/utils/supabase/client';
+import { useRouter } from 'next/navigation';
 type Tab = 'today' | 'habits' | 'stats' | 'templates' | 'blog';
 
-export default function App() {
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
+export default function App({ initialUser }: { initialUser: User }) {
+  const [currentUser, setCurrentUser] = useState<User>(initialUser);
   const [habits, setHabits] = useState<Habit[]>([]);
   const [templates, setTemplates] = useState<HabitTemplate[]>([]);
   const [blogPosts, setBlogPosts] = useState<BlogPost[]>(DEFAULT_BLOG_POSTS);
+
+  const supabase = createClient();
+  const router = useRouter();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>('today');
@@ -35,37 +39,42 @@ export default function App() {
   const [isLoaded, setIsLoaded] = useState(false);
 
   useEffect(() => {
-    const savedUser = localStorage.getItem('aesthetic-user');
-    if (savedUser) setCurrentUser(JSON.parse(savedUser));
+    const fetchHabits = async () => {
+      const { data: habitsData } = await supabase
+        .from('habits')
+        .select('*')
+        .eq('user_id', currentUser.id);
+        
+      if (habitsData) {
+        const { data: logsData } = await supabase
+          .from('habit_logs')
+          .select('habit_id, completed_date');
+          
+        const formattedHabits: Habit[] = habitsData.map(h => ({
+          id: h.id,
+          name: h.name,
+          color: h.color as HabitColor,
+          createdAt: h.created_at,
+          completedDates: logsData?.filter(l => l.habit_id === h.id).map(l => l.completed_date) || []
+        }));
+        
+        setHabits(formattedHabits);
+      }
+      
+      const savedTemplates = localStorage.getItem('aesthetic-templates');
+      if (savedTemplates) setTemplates(JSON.parse(savedTemplates));
+      
+      const savedBlog = localStorage.getItem('aesthetic-blog');
+      if (savedBlog) {
+        const parsed = JSON.parse(savedBlog);
+        if (parsed.length > 0) setBlogPosts(parsed);
+      }
+      
+      setIsLoaded(true);
+    };
     
-    const savedHabits = localStorage.getItem('aesthetic-habits');
-    if (savedHabits) setHabits(JSON.parse(savedHabits));
-    
-    const savedTemplates = localStorage.getItem('aesthetic-templates');
-    if (savedTemplates) setTemplates(JSON.parse(savedTemplates));
-    
-    const savedBlog = localStorage.getItem('aesthetic-blog');
-    if (savedBlog) {
-      const parsed = JSON.parse(savedBlog);
-      if (parsed.length > 0) setBlogPosts(parsed);
-    }
-    
-    setIsLoaded(true);
-  }, []);
-
-  useEffect(() => {
-    if (!isLoaded) return;
-    if (currentUser) {
-      localStorage.setItem('aesthetic-user', JSON.stringify(currentUser));
-    } else {
-      localStorage.removeItem('aesthetic-user');
-    }
-  }, [currentUser, isLoaded]);
-
-  useEffect(() => {
-    if (!isLoaded) return;
-    localStorage.setItem('aesthetic-habits', JSON.stringify(habits));
-  }, [habits, isLoaded]);
+    fetchHabits();
+  }, [currentUser.id, supabase]);
 
   // Keep templates in sync for the user view if coach added them
   useEffect(() => {
@@ -81,16 +90,14 @@ export default function App() {
     return () => window.removeEventListener('storage', handleStorageChange);
   }, [isLoaded]);
 
-  const handleLogout = () => {
-    setCurrentUser(null);
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    router.push('/login');
+    router.refresh();
   };
 
   if (!isLoaded) {
     return null;
-  }
-
-  if (!currentUser) {
-    return <LoginPage onLogin={setCurrentUser} />;
   }
 
   if (currentUser.role === 'coach') {
@@ -99,15 +106,23 @@ export default function App() {
 
   // --- USER VIEW ---
 
-  const handleAddHabit = (name: string, color: HabitColor) => {
-    const newHabit: Habit = {
-      id: crypto.randomUUID(),
-      name,
-      color,
-      completedDates: [],
-      createdAt: getToday(),
-    };
-    setHabits([...habits, newHabit]);
+  const handleAddHabit = async (name: string, color: HabitColor) => {
+    const { data, error } = await supabase
+      .from('habits')
+      .insert({ name, color, user_id: currentUser.id })
+      .select()
+      .single();
+
+    if (!error && data) {
+      const newHabit: Habit = {
+        id: data.id,
+        name: data.name,
+        color: data.color as HabitColor,
+        completedDates: [],
+        createdAt: data.created_at,
+      };
+      setHabits([...habits, newHabit]);
+    }
   };
   
   const handleAdoptTemplate = (template: HabitTemplate) => {
@@ -115,20 +130,38 @@ export default function App() {
     setActiveTab('today');
   };
 
-  const handleToggleDay = (habitId: string, dateStr: string) => {
-    setHabits(habits.map(habit => {
-      if (habit.id === habitId) {
-        const isCompleted = habit.completedDates.includes(dateStr);
-        const newDates = isCompleted 
-          ? habit.completedDates.filter(d => d !== dateStr)
-          : [...habit.completedDates, dateStr];
-        return { ...habit, completedDates: newDates };
-      }
-      return habit;
-    }));
+  const handleToggleDay = async (habitId: string, dateStr: string) => {
+    const habit = habits.find(h => h.id === habitId);
+    if (!habit) return;
+
+    const isCompleted = habit.completedDates.includes(dateStr);
+    
+    if (isCompleted) {
+      await supabase
+        .from('habit_logs')
+        .delete()
+        .match({ habit_id: habitId, completed_date: dateStr });
+        
+      setHabits(habits.map(h => 
+        h.id === habitId 
+          ? { ...h, completedDates: h.completedDates.filter(d => d !== dateStr) }
+          : h
+      ));
+    } else {
+      await supabase
+        .from('habit_logs')
+        .insert({ habit_id: habitId, completed_date: dateStr });
+        
+      setHabits(habits.map(h => 
+        h.id === habitId 
+          ? { ...h, completedDates: [...h.completedDates, dateStr] }
+          : h
+      ));
+    }
   };
 
-  const handleDeleteHabit = (habitId: string) => {
+  const handleDeleteHabit = async (habitId: string) => {
+    await supabase.from('habits').delete().eq('id', habitId);
     setHabits(habits.filter(h => h.id !== habitId));
   };
 

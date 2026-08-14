@@ -1,25 +1,38 @@
+"use client";
+
 import React, { useState } from 'react';
-import { Role, User } from '../../../types';
 import { motion } from 'motion/react';
-import { UserCircle, GraduationCap, ArrowRight } from 'lucide-react';
+import { UserCircle, ArrowRight, Lock, Mail } from 'lucide-react';
+import { createClient } from '@/utils/supabase/client';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
-interface LoginViewProps {
-  onLogin: (user: User) => void;
-}
+export default function LoginPage() {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const router = useRouter();
+  const supabase = createClient();
 
-export default function LoginPage({ onLogin }: LoginViewProps) {
-  const [name, setName] = useState('');
-
-  const [role, setRole] = useState<Role | null>(null);
-
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (name.trim() && role) {
-      onLogin({
-        id: crypto.randomUUID(),
-        name: name.trim(),
-        role: role
+    setLoading(true);
+    setError(null);
+    
+    if (email.trim() && password.trim()) {
+      const { error } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password: password.trim(),
       });
+
+      if (error) {
+        setError(error.message);
+        setLoading(false);
+      } else {
+        router.push('/dashboard');
+        router.refresh();
+      }
     }
   };
 
@@ -31,69 +44,70 @@ export default function LoginPage({ onLogin }: LoginViewProps) {
         className="w-full max-w-md bg-white rounded-3xl shadow-sm border border-stone-200 p-8 md:p-10"
       >
         <div className="text-center mb-10">
-          <h1 className="font-playfair text-3xl font-semibold text-stone-800 mb-2">Bienvenido</h1>
-          <p className="font-outfit text-stone-500">Por favor, identifícate para continuar.</p>
+          <h1 className="font-playfair text-3xl font-semibold text-stone-800 mb-2">Bienvenido de nuevo</h1>
+          <p className="font-outfit text-stone-500">Ingresa tus credenciales para continuar.</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-8">
+        {error && (
+          <div className="mb-6 p-4 bg-red-50 text-red-600 rounded-xl font-outfit text-sm border border-red-100">
+            {error}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-6">
           <div>
-            <label htmlFor="name" className="block text-sm font-medium text-stone-600 mb-2 font-outfit">
-              Tu Nombre
+            <label htmlFor="email" className="block text-sm font-medium text-stone-600 mb-2 font-outfit">
+              Correo Electrónico
             </label>
-            <input
-              id="name"
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Ej. Ana García"
-              className="w-full px-4 py-3.5 rounded-xl border border-stone-200 bg-stone-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-stone-200 focus:border-transparent transition-all font-outfit"
-              required
-            />
+            <div className="relative">
+              <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-stone-400" size={18} />
+              <input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="ejemplo@correo.com"
+                className="w-full pl-11 pr-4 py-3.5 rounded-xl border border-stone-200 bg-stone-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-stone-200 focus:border-transparent transition-all font-outfit"
+                required
+              />
+            </div>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-stone-600 mb-3 font-outfit">
-              Selecciona tu rol
+            <label htmlFor="password" className="block text-sm font-medium text-stone-600 mb-2 font-outfit">
+              Contraseña
             </label>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <button
-                type="button"
-                onClick={() => setRole('user')}
-                className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all gap-2 ${
-                  role === 'user' 
-                    ? 'border-stone-800 bg-stone-50 text-stone-900' 
-                    : 'border-stone-100 bg-white text-stone-400 hover:border-stone-200 hover:text-stone-600'
-                }`}
-              >
-                <UserCircle size={28} />
-                <span className="font-outfit font-medium">Alumno / Usuario</span>
-              </button>
-              
-              <button
-                type="button"
-                onClick={() => setRole('coach')}
-                className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all gap-2 ${
-                  role === 'coach' 
-                    ? 'border-stone-800 bg-stone-50 text-stone-900' 
-                    : 'border-stone-100 bg-white text-stone-400 hover:border-stone-200 hover:text-stone-600'
-                }`}
-              >
-                <GraduationCap size={28} />
-                <span className="font-outfit font-medium">Coach / Guía</span>
-              </button>
+            <div className="relative">
+              <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-stone-400" size={18} />
+              <input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                className="w-full pl-11 pr-4 py-3.5 rounded-xl border border-stone-200 bg-stone-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-stone-200 focus:border-transparent transition-all font-outfit"
+                required
+              />
             </div>
           </div>
 
           <button
             type="submit"
-            disabled={!name.trim() || !role}
+            disabled={!email.trim() || !password.trim() || loading}
             className="w-full py-4 bg-stone-900 hover:bg-stone-800 disabled:bg-stone-300 disabled:cursor-not-allowed text-white rounded-xl font-medium transition-colors font-outfit flex items-center justify-center gap-2"
           >
-            <span>Ingresar</span>
-            <ArrowRight size={18} />
+            <span>{loading ? 'Iniciando sesión...' : 'Ingresar'}</span>
+            {!loading && <ArrowRight size={18} />}
           </button>
         </form>
+
+        <div className="mt-8 text-center font-outfit text-stone-500 text-sm">
+          ¿No tienes una cuenta?{' '}
+          <Link href="/register" className="text-stone-900 font-medium hover:underline">
+            Regístrate aquí
+          </Link>
+        </div>
       </motion.div>
     </div>
   );
-};
+}
