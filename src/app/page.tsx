@@ -24,7 +24,10 @@ export default function HomePage() {
             <span>Comenzar ahora</span>
             <ArrowRight size={18} />
           </Link>
-          <Link href="/login" className="px-8 py-4 bg-white border border-stone-200 text-stone-700 rounded-xl font-outfit font-medium hover:bg-stone-50 transition-colors">
+          <Link href="/explorar" className="px-8 py-4 bg-white border border-stone-200 text-stone-700 rounded-xl font-outfit font-medium hover:bg-stone-50 transition-colors">
+            Explorar plantillas
+          </Link>
+          <Link href="/login" className="px-8 py-4 text-stone-500 font-outfit font-medium hover:text-stone-800 transition-colors flex items-center justify-center">
             Iniciar sesión
           </Link>
         </div>

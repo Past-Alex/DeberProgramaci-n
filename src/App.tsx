@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { BlogPost, Habit, HabitColor, User, HabitTemplate } from './types';
 import { HabitCard } from './components/HabitCard';
 import { AddHabitModal } from './components/AddHabitModal';
+import { EditHabitModal } from './components/EditHabitModal';
 import { TodayView } from './components/TodayView';
 import { StatsView } from './components/StatsView';
 import LoginPage from './app/login/page';
@@ -10,7 +11,8 @@ import { CoachView } from './components/CoachView';
 import { ConfirmModal } from './components/ConfirmModal';
 import { getToday, colorStyles, DEFAULT_BLOG_POSTS } from './utils';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Sparkles, LayoutDashboard, ListTodo, BarChart3, LogOut, Download, BookOpen, Heart, Image as ImageIcon, UploadCloud, X, Trash2 } from 'lucide-react';
+import { Plus, Sparkles, LayoutDashboard, ListTodo, BarChart3, LogOut, Download, BookOpen, Heart, Image as ImageIcon, UploadCloud, X, Trash2, UserCircle, Globe, Check } from 'lucide-react';
+import Link from 'next/link';
 import { createClient } from '@/utils/supabase/client';
 import { useRouter } from 'next/navigation';
 type Tab = 'today' | 'habits' | 'stats' | 'templates' | 'blog';
@@ -25,6 +27,7 @@ export default function App({ initialUser }: { initialUser: User }) {
   const router = useRouter();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [habitToEdit, setHabitToEdit] = useState<Habit | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>('today');
   const [isPublishing, setIsPublishing] = useState(false);
   const [postTitle, setPostTitle] = useState('');
@@ -35,10 +38,25 @@ export default function App({ initialUser }: { initialUser: User }) {
   const [commentText, setCommentText] = useState('');
   const [habitToDelete, setHabitToDelete] = useState<string | null>(null);
   const [postToDelete, setPostToDelete] = useState<string | null>(null);
-
+  const [searchQuery, setSearchQuery] = useState('');
   const [isLoaded, setIsLoaded] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   useEffect(() => {
+    if (toastMessage) {
+      const timer = setTimeout(() => setToastMessage(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [toastMessage]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      if (url.searchParams.get('success') === '1') {
+        setToastMessage('¡Hábito añadido exitosamente!');
+        window.history.replaceState({}, '', window.location.pathname);
+      }
+    }
     const fetchHabits = async () => {
       const { data: habitsData } = await supabase
         .from('habits')
@@ -106,14 +124,8 @@ export default function App({ initialUser }: { initialUser: User }) {
 
   // --- USER VIEW ---
 
-  const handleAddHabit = async (name: string, color: HabitColor) => {
-    const { data, error } = await supabase
-      .from('habits')
-      .insert({ name, color, user_id: currentUser.id })
-      .select()
-      .single();
-
-    if (!error && data) {
+  const handleAddHabit = (data: any) => {
+    if (data) {
       const newHabit: Habit = {
         id: data.id,
         name: data.name,
@@ -122,12 +134,22 @@ export default function App({ initialUser }: { initialUser: User }) {
         createdAt: data.created_at,
       };
       setHabits([...habits, newHabit]);
+      setToastMessage('¡Hábito creado exitosamente!');
     }
   };
   
-  const handleAdoptTemplate = (template: HabitTemplate) => {
-    handleAddHabit(template.name, template.color);
-    setActiveTab('today');
+  const handleAdoptTemplate = async (template: HabitTemplate) => {
+    const formData = new FormData();
+    formData.append('name', template.name);
+    formData.append('color', template.color);
+    try {
+      const { createHabit } = await import('./app/actions');
+      const newHabit = await createHabit(formData);
+      handleAddHabit(newHabit);
+      setActiveTab('today');
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   const handleToggleDay = async (habitId: string, dateStr: string) => {
@@ -161,8 +183,15 @@ export default function App({ initialUser }: { initialUser: User }) {
   };
 
   const handleDeleteHabit = async (habitId: string) => {
-    await supabase.from('habits').delete().eq('id', habitId);
-    setHabits(habits.filter(h => h.id !== habitId));
+    const formData = new FormData();
+    formData.append('id', habitId);
+    try {
+      const { deleteHabit } = await import('./app/actions');
+      await deleteHabit(formData);
+      setHabits(habits.filter(h => h.id !== habitId));
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   const handleDrag = (e: React.DragEvent) => {
@@ -349,6 +378,13 @@ export default function App({ initialUser }: { initialUser: User }) {
           </div>
           
           <div className="flex items-center gap-3">
+            <Link
+              href="/perfil"
+              className="p-3 bg-white border border-stone-200 text-stone-400 hover:text-stone-700 rounded-full transition-all hover:shadow-sm"
+              title="Mi Perfil"
+            >
+              <UserCircle size={18} />
+            </Link>
             <motion.button
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -419,6 +455,16 @@ export default function App({ initialUser }: { initialUser: User }) {
             <BookOpen size={18} />
             <span>Blog</span>
           </button>
+          
+          <div className="w-px h-8 bg-stone-200 my-auto mx-1"></div>
+
+          <Link
+            href="/explorar"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-outfit font-medium transition-all text-stone-500 hover:text-stone-700 hover:bg-stone-100/50"
+          >
+            <Globe size={18} />
+            <span>Comunidad</span>
+          </Link>
         </nav>
 
         {/* Main Content Area */}
@@ -440,27 +486,46 @@ export default function App({ initialUser }: { initialUser: User }) {
               )}
 
               {activeTab === 'habits' && (
-                <div className="space-y-4">
-                  {habits.length === 0 ? (
-                    <div className="text-center py-20 px-6 border border-dashed border-stone-200 rounded-3xl bg-stone-50/50">
-                      <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto mb-4 shadow-sm border border-stone-100 text-stone-300">
-                        <Sparkles size={24} />
+                <div className="space-y-6">
+                  {habits.length > 0 && (
+                    <div className="relative">
+                      <div className="absolute left-4 top-1/2 -translate-y-1/2 text-stone-400">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
                       </div>
-                      <h3 className="font-playfair text-xl text-stone-600 mb-2">Comienza tu viaje</h3>
-                      <p className="font-outfit text-stone-400 max-w-sm mx-auto">
-                        Añade tu primer hábito para empezar a rastrear tu progreso diario.
-                      </p>
-                    </div>
-                  ) : (
-                    habits.map((habit) => (
-                      <HabitCard
-                        key={habit.id}
-                        habit={habit}
-                        onToggleDay={handleToggleDay}
-                        onDelete={setHabitToDelete}
+                      <input 
+                        type="text" 
+                        placeholder="Buscar hábitos..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="w-full pl-11 pr-4 py-3 bg-white border border-stone-200 rounded-xl font-outfit focus:outline-none focus:ring-2 focus:ring-stone-200 shadow-sm transition-all"
                       />
-                    ))
+                    </div>
                   )}
+                  <div className="space-y-4">
+                    {habits.length === 0 ? (
+                      <div className="text-center py-20 px-6 border border-dashed border-stone-200 rounded-3xl bg-stone-50/50">
+                        <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto mb-4 shadow-sm border border-stone-100 text-stone-300">
+                          <Sparkles size={24} />
+                        </div>
+                        <h3 className="font-playfair text-xl text-stone-600 mb-2">Comienza tu viaje</h3>
+                        <p className="font-outfit text-stone-400 max-w-sm mx-auto">
+                          Añade tu primer hábito para empezar a rastrear tu progreso diario.
+                        </p>
+                      </div>
+                    ) : (
+                      habits
+                        .filter(h => h.name.toLowerCase().includes(searchQuery.toLowerCase()))
+                        .map((habit) => (
+                          <HabitCard
+                            key={habit.id}
+                            habit={habit}
+                            onToggleDay={handleToggleDay}
+                            onDelete={setHabitToDelete}
+                            onEdit={setHabitToEdit}
+                          />
+                        ))
+                    )}
+                  </div>
                 </div>
               )}
               
@@ -690,6 +755,31 @@ export default function App({ initialUser }: { initialUser: User }) {
         onClose={() => setIsModalOpen(false)}
         onAdd={handleAddHabit}
       />
+
+      <EditHabitModal
+        isOpen={!!habitToEdit}
+        onClose={() => setHabitToEdit(null)}
+        habit={habitToEdit}
+        onUpdate={(updatedHabit) => {
+          setHabits(habits.map(h => h.id === updatedHabit.id ? updatedHabit : h));
+          setToastMessage('¡Hábito actualizado exitosamente!');
+        }}
+      />
+
+      {/* Toast Notification */}
+      <AnimatePresence>
+        {toastMessage && (
+          <motion.div
+            initial={{ opacity: 0, y: 50, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 50, scale: 0.9 }}
+            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] bg-emerald-500 text-white px-6 py-3 rounded-full shadow-lg font-outfit font-medium flex items-center gap-2"
+          >
+            <Check size={18} />
+            <span>{toastMessage}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {selectedPost && (

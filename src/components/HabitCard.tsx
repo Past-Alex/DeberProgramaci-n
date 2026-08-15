@@ -1,4 +1,5 @@
 import React from 'react';
+import Link from 'next/link';
 import { Habit, HabitColor } from '../types';
 import { colorStyles, getPast7Days, getDayName, calculateStreak } from '../utils';
 import { motion } from 'motion/react';
@@ -8,9 +9,10 @@ interface HabitCardProps {
   habit: Habit;
   onToggleDay: (habitId: string, dateStr: string) => void;
   onDelete: (habitId: string) => void;
+  onEdit?: (habit: Habit) => void;
 }
 
-export const HabitCard: React.FC<HabitCardProps> = ({ habit, onToggleDay, onDelete }) => {
+export const HabitCard: React.FC<HabitCardProps> = ({ habit, onToggleDay, onDelete, onEdit }) => {
   const past7Days = getPast7Days();
   const styles = colorStyles[habit.color];
   const streak = calculateStreak(habit.completedDates);
@@ -25,9 +27,11 @@ export const HabitCard: React.FC<HabitCardProps> = ({ habit, onToggleDay, onDele
     >
       <div className="flex justify-between items-start mb-6">
         <div>
-          <h3 className="font-outfit font-medium text-lg text-stone-800 mb-1 tracking-tight">
-            {habit.name}
-          </h3>
+          <Link href={`/habito/${habit.id}`} className="hover:underline">
+            <h3 className="font-outfit font-medium text-lg text-stone-800 mb-1 tracking-tight">
+              {habit.name}
+            </h3>
+          </Link>
           <div className="flex items-center gap-1.5 text-sm font-medium text-stone-500">
             <Flame size={16} className={streak > 0 ? styles.text : 'text-stone-300'} />
             <span className={streak > 0 ? styles.text : ''}>
@@ -35,13 +39,22 @@ export const HabitCard: React.FC<HabitCardProps> = ({ habit, onToggleDay, onDele
             </span>
           </div>
         </div>
-        <button 
-          onClick={() => onDelete(habit.id)}
-          className="opacity-0 group-hover:opacity-100 transition-opacity p-2 text-stone-400 hover:text-red-500 hover:bg-red-50 rounded-full"
-          title="Eliminar hábito"
-        >
-          <Trash2 size={16} />
-        </button>
+        <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
+          <button 
+            onClick={() => onEdit && onEdit(habit)}
+            className="p-2 text-stone-400 hover:text-blue-500 hover:bg-blue-50 rounded-full transition-colors"
+            title="Editar hábito"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+          </button>
+          <button 
+            onClick={() => onDelete(habit.id)}
+            className="p-2 text-stone-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors"
+            title="Eliminar hábito"
+          >
+            <Trash2 size={16} />
+          </button>
+        </div>
       </div>
 
       <div className="flex justify-between items-center gap-2">

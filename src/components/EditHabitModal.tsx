@@ -1,29 +1,37 @@
-import React, { useState } from 'react';
-import { HabitColor } from '../types';
+import React, { useState, useEffect } from 'react';
+import { Habit, HabitColor } from '../types';
 import { colorStyles } from '../utils';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Plus } from 'lucide-react';
-import { createHabit } from '../app/actions';
+import { X, Save } from 'lucide-react';
+import { updateHabit } from '../app/actions';
 
-interface AddHabitModalProps {
+interface EditHabitModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onAdd: (habit: any) => void;
+  habit: Habit | null;
+  onUpdate: (habit: any) => void;
 }
 
 const colors: HabitColor[] = ['rose', 'amber', 'emerald', 'sky', 'violet', 'stone'];
 
-export const AddHabitModal: React.FC<AddHabitModalProps> = ({ isOpen, onClose, onAdd }) => {
+export const EditHabitModal: React.FC<EditHabitModalProps> = ({ isOpen, onClose, habit, onUpdate }) => {
   const [name, setName] = useState('');
   const [selectedColor, setSelectedColor] = useState<HabitColor>('rose');
 
+  useEffect(() => {
+    if (habit) {
+      setName(habit.name);
+      setSelectedColor(habit.color);
+    }
+  }, [habit]);
+
   const handleAction = async (formData: FormData) => {
+    if (!habit) return;
+    formData.append('id', habit.id);
     formData.append('color', selectedColor);
     try {
-      const newHabit = await createHabit(formData);
-      onAdd(newHabit); // We will update onAdd signature in App.tsx to accept the full habit object
-      setName('');
-      setSelectedColor('rose');
+      await updateHabit(formData);
+      onUpdate({ ...habit, name, color: selectedColor });
       onClose();
     } catch (e) {
       console.error(e);
@@ -50,7 +58,7 @@ export const AddHabitModal: React.FC<AddHabitModalProps> = ({ isOpen, onClose, o
             <div className="p-6 sm:p-8">
               <div className="flex justify-between items-center mb-6">
                 <h2 className="font-playfair text-2xl font-semibold text-stone-800">
-                  Nuevo Hábito
+                  Editar Hábito
                 </h2>
                 <button 
                   onClick={onClose}
@@ -63,7 +71,7 @@ export const AddHabitModal: React.FC<AddHabitModalProps> = ({ isOpen, onClose, o
               <form action={handleAction} className="space-y-6">
                 <div>
                   <label htmlFor="name" className="block text-sm font-medium text-stone-600 mb-2 font-outfit">
-                    ¿Qué quieres lograr?
+                    Nombre del hábito
                   </label>
                   <input
                     id="name"
@@ -102,8 +110,8 @@ export const AddHabitModal: React.FC<AddHabitModalProps> = ({ isOpen, onClose, o
                     disabled={!name.trim()}
                     className="w-full py-3.5 px-4 bg-stone-900 hover:bg-stone-800 disabled:bg-stone-300 disabled:cursor-not-allowed text-white rounded-xl font-medium transition-colors font-outfit flex items-center justify-center gap-2"
                   >
-                    <Plus size={18} />
-                    <span>Crear hábito</span>
+                    <Save size={18} />
+                    <span>Guardar cambios</span>
                   </button>
                 </div>
               </form>
