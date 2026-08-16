@@ -86,7 +86,7 @@ export const TodayView: React.FC<TodayViewProps> = ({ habits, onToggleDay }) => 
                   transition={{ delay: i * 0.05 }}
                   className={`
                     group relative p-4 rounded-2xl border transition-all duration-300 flex items-center justify-between cursor-pointer
-                    ${isCompleted ? 'bg-stone-50 border-stone-100' : 'bg-white border-stone-200 hover:border-stone-300 hover:shadow-sm'}
+                    ${isCompleted ? 'bg-stone-50 border-stone-100' : `bg-white ${styles.border} hover:shadow-sm`}
                   `}
                   onClick={(e) => { e.stopPropagation(); onToggleDay(habit.id, todayStr); }}
                 >
@@ -96,7 +96,7 @@ export const TodayView: React.FC<TodayViewProps> = ({ habits, onToggleDay }) => 
                         w-7 h-7 rounded-full flex items-center justify-center border-2 transition-all
                         ${isCompleted 
                           ? `${styles.checkedBg} border-transparent text-white scale-110 shadow-sm` 
-                          : 'border-stone-200 text-transparent group-hover:border-stone-400'
+                          : `${styles.border} text-transparent ${styles.hoverBorder}`
                         }
                       `}
                       onClick={(e) => { e.stopPropagation(); onToggleDay(habit.id, todayStr); }}

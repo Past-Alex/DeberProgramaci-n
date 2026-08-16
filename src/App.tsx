@@ -767,6 +767,32 @@ export default function App({ initialUser }: { initialUser: User }) {
         }}
       />
 
+      <ConfirmModal
+        isOpen={!!habitToDelete}
+        onClose={() => setHabitToDelete(null)}
+        onConfirm={() => {
+          if (habitToDelete) {
+            handleDeleteHabit(habitToDelete);
+            setToastMessage('¡Hábito eliminado exitosamente!');
+          }
+        }}
+        title="Eliminar hábito"
+        message="¿Estás seguro de que deseas eliminar este hábito? Esta acción no se puede deshacer y perderás todo tu progreso."
+      />
+
+      <ConfirmModal
+        isOpen={!!postToDelete}
+        onClose={() => setPostToDelete(null)}
+        onConfirm={() => {
+          if (postToDelete) {
+            handleDeletePost(postToDelete);
+            setToastMessage('¡Publicación eliminada!');
+          }
+        }}
+        title="Eliminar publicación"
+        message="¿Estás seguro de que deseas eliminar esta publicación del blog? Esta acción no se puede deshacer."
+      />
+
       {/* Toast Notification */}
       <AnimatePresence>
         {toastMessage && (
