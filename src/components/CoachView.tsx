@@ -336,7 +336,7 @@ export const CoachView: React.FC<CoachViewProps> = ({ user, onLogout }) => {
                     </div>
                   ) : (
                     templates.map(template => {
-                      const styles = colorStyles[template.color];
+                      const styles = colorStyles[template.color] || colorStyles.stone;
                       return (
                         <motion.div 
                           key={template.id}

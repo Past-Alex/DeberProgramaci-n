@@ -543,7 +543,7 @@ export default function App({ initialUser }: { initialUser: User }) {
                   ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       {templates.map(template => {
-                        const styles = colorStyles[template.color];
+                        const styles = colorStyles[template.color] || colorStyles.stone;
                         return (
                           <motion.div 
                             key={template.id}

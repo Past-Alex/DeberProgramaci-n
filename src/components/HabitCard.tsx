@@ -14,7 +14,7 @@ interface HabitCardProps {
 
 export const HabitCard: React.FC<HabitCardProps> = ({ habit, onToggleDay, onDelete, onEdit }) => {
   const past7Days = getPast7Days();
-  const styles = colorStyles[habit.color];
+  const styles = colorStyles[habit.color] || colorStyles.stone;
   const streak = calculateStreak(habit.completedDates);
 
   return (

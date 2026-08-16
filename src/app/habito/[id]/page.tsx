@@ -40,7 +40,7 @@ export default async function HabitoPage({ params }: { params: { id: string } })
     .eq('habit_id', habit.id);
 
   const totalCompletions = logs?.length || 0;
-  const styles = colorStyles[habit.color as keyof typeof colorStyles];
+  const styles = colorStyles[habit.color as keyof typeof colorStyles] || colorStyles.stone;
 
   return (
     <div className="min-h-screen bg-[#FDFCF8] p-5">

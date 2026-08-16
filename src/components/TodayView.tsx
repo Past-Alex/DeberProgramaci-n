@@ -75,7 +75,7 @@ export const TodayView: React.FC<TodayViewProps> = ({ habits, onToggleDay }) => 
           <div className="grid gap-3">
             {habits.map((habit, i) => {
               const isCompleted = habit.completedDates.includes(todayStr);
-              const styles = colorStyles[habit.color];
+              const styles = colorStyles[habit.color] || colorStyles.stone;
               const streak = calculateStreak(habit.completedDates);
               
               return (
