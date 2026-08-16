@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { HabitTemplate, HabitColor, User, BlogPost } from '../types';
 import { colorStyles, DEFAULT_BLOG_POSTS } from '../utils';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Users, Library, LogOut, Trash2, BookOpen, Heart, UploadCloud, X } from 'lucide-react';
 import { ConfirmModal } from './ConfirmModal';
+import { createClient } from '@/utils/supabase/client';
+import { BookOpen, Heart, Library, LogOut, Plus, Trash2, UploadCloud, Users, X } from 'lucide-react';
 
 interface CoachViewProps {
   user: User;
@@ -61,6 +62,47 @@ export const CoachView: React.FC<CoachViewProps> = ({ user, onLogout }) => {
   const [commentText, setCommentText] = useState('');
   const [templateToDelete, setTemplateToDelete] = useState<string | null>(null);
   const [postToDelete, setPostToDelete] = useState<string | null>(null);
+  const [logoutConfirm, setLogoutConfirm] = useState(false);
+
+  // Real students state
+  const [students, setStudents] = useState<any[]>([]);
+  const [loadingStudents, setLoadingStudents] = useState(false);
+
+  useEffect(() => {
+    const fetchStudents = async () => {
+      setLoadingStudents(true);
+      const supabase = createClient();
+      
+      const { data: profilesData } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('role', 'user');
+
+      if (profilesData && profilesData.length > 0) {
+        const { data: habitsData } = await supabase.from('habits').select('id, user_id');
+        const { data: allLogs } = await supabase.from('habit_logs').select('habit_id');
+        
+        const studentsList = profilesData.map(profile => {
+          const userHabits = (habitsData || []).filter(h => h.user_id === profile.id);
+          const userHabitIds = userHabits.map(h => h.id);
+          const userLogsCount = (allLogs || []).filter(l => userHabitIds.includes(l.habit_id)).length;
+          
+          return {
+            id: profile.id,
+            name: profile.name,
+            totalHabits: userHabits.length,
+            totalCompletions: userLogsCount,
+          };
+        });
+        setStudents(studentsList);
+      }
+      setLoadingStudents(false);
+    };
+
+    if (activeTab === 'students') {
+      fetchStudents();
+    }
+  }, [activeTab]);
 
   useEffect(() => {
     localStorage.setItem('aesthetic-templates', JSON.stringify(templates));
@@ -223,7 +265,7 @@ export const CoachView: React.FC<CoachViewProps> = ({ user, onLogout }) => {
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: 0.2 }}
-            onClick={onLogout}
+            onClick={() => setLogoutConfirm(true)}
             className="flex items-center gap-2 px-4 py-2.5 bg-white border border-stone-200 text-stone-600 hover:text-stone-900 rounded-full font-outfit font-medium transition-all hover:shadow-sm"
           >
             <LogOut size={16} />
@@ -249,7 +291,7 @@ export const CoachView: React.FC<CoachViewProps> = ({ user, onLogout }) => {
             }`}
           >
             <Users size={18} />
-            <span>Alumnos (Demo)</span>
+            <span>Alumnos</span>
           </button>
           <button
             onClick={() => setActiveTab('blog')}
@@ -379,21 +421,44 @@ export const CoachView: React.FC<CoachViewProps> = ({ user, onLogout }) => {
                   <Users size={32} className="mx-auto text-stone-300 mb-4" />
                   <h3 className="font-playfair text-xl text-stone-800 mb-2">Monitoreo de Alumnos</h3>
                   <p className="font-outfit text-stone-500 max-w-md mx-auto mb-6">
-                    Esta es una vista de demostración. Aquí podrías ver el progreso de los usuarios que han adoptado tus plantillas.
+                    Aquí puedes ver el progreso de los alumnos registrados en la plataforma.
                   </p>
                   
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-left">
-                    <div className="p-4 border border-stone-100 rounded-2xl bg-stone-50">
-                      <div className="font-outfit font-medium text-stone-800">Ana García</div>
-                      <div className="text-sm text-stone-500">Racha actual: 12 días</div>
-                      <div className="mt-3 w-full bg-stone-200 rounded-full h-1.5"><div className="bg-emerald-400 h-1.5 rounded-full w-[80%]"></div></div>
+                  {loadingStudents ? (
+                    <div className="py-10 text-stone-400 flex flex-col items-center">
+                      <svg className="animate-spin h-8 w-8 text-stone-300 mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      <span>Cargando alumnos...</span>
                     </div>
-                    <div className="p-4 border border-stone-100 rounded-2xl bg-stone-50">
-                      <div className="font-outfit font-medium text-stone-800">Carlos Ruiz</div>
-                      <div className="text-sm text-stone-500">Racha actual: 3 días</div>
-                      <div className="mt-3 w-full bg-stone-200 rounded-full h-1.5"><div className="bg-amber-400 h-1.5 rounded-full w-[40%]"></div></div>
+                  ) : students.length === 0 ? (
+                    <div className="text-stone-400 py-10 border border-dashed border-stone-200 rounded-2xl bg-stone-50/50">
+                      No hay alumnos registrados actualmente.
                     </div>
-                  </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-left">
+                      {students.map(student => (
+                        <div key={student.id} className="p-5 border border-stone-100 rounded-2xl bg-stone-50 hover:shadow-sm transition-shadow">
+                          <div className="font-outfit font-medium text-stone-800 text-lg mb-1">{student.name || 'Usuario'}</div>
+                          <div className="text-sm text-stone-500 mb-3">
+                            {student.totalHabits} hábitos creados
+                          </div>
+                          
+                          <div className="text-xs text-stone-400 mb-1.5 flex justify-between">
+                            <span>Progreso total</span>
+                            <span className="font-medium text-emerald-600">{student.totalCompletions} completados</span>
+                          </div>
+                          <div className="w-full bg-stone-200 rounded-full h-1.5">
+                            <div 
+                              className="bg-emerald-400 h-1.5 rounded-full transition-all" 
+                              style={{ width: `${Math.min(100, (student.totalCompletions / (student.totalHabits * 7 || 1)) * 100)}%` }}
+                            ></div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </motion.div>
             )}
@@ -684,6 +749,15 @@ export const CoachView: React.FC<CoachViewProps> = ({ user, onLogout }) => {
             }
           }
         }}
+      />
+
+      <ConfirmModal
+        isOpen={logoutConfirm}
+        title="Cerrar sesión"
+        message="¿Estás seguro de que quieres cerrar sesión?"
+        confirmText="Confirmar"
+        onClose={() => setLogoutConfirm(false)}
+        onConfirm={onLogout}
       />
     </div>
   );

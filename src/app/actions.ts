@@ -94,3 +94,30 @@ export async function deleteHabit(formData: FormData) {
   revalidatePath('/dashboard');
   revalidatePath('/explorar');
 }
+
+export async function updateProfileName(formData: FormData) {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) {
+    throw new Error('Not authenticated');
+  }
+
+  const name = formData.get('name') as string;
+
+  if (!name || name.trim() === '') {
+    throw new Error('Name cannot be empty');
+  }
+
+  const { error } = await supabase
+    .from('profiles')
+    .update({ name: name.trim() })
+    .eq('id', user.id);
+
+  if (error) {
+    throw new Error('Failed to update profile: ' + error.message);
+  }
+
+  revalidatePath('/perfil');
+  revalidatePath('/dashboard');
+}

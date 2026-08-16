@@ -3,6 +3,7 @@ import { createClient } from '@/utils/supabase/server';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, UserCircle, Mail, Shield } from 'lucide-react';
+import { ProfileNameForm } from '@/components/ProfileNameForm';
 
 export default async function PerfilPage() {
   const supabase = createClient();
@@ -39,14 +40,7 @@ export default async function PerfilPage() {
           </div>
 
           <div className="space-y-6">
-            <div>
-              <label className="block text-sm font-medium text-stone-500 mb-2 font-outfit flex items-center gap-2">
-                <UserCircle size={16} /> Nombre
-              </label>
-              <div className="font-outfit text-stone-800 text-lg px-4 py-3 bg-stone-50 rounded-xl border border-stone-100">
-                {profile?.name || 'Usuario'}
-              </div>
-            </div>
+            <ProfileNameForm initialName={profile?.name || 'Usuario'} />
 
             <div>
               <label className="block text-sm font-medium text-stone-500 mb-2 font-outfit flex items-center gap-2">
