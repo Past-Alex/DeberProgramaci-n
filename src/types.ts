@@ -34,6 +34,7 @@ export interface BlogPost {
   id: string;
   title: string;
   content: string;
+  author_id: string;
   authorName: string;
   date: string;
   likes: number;

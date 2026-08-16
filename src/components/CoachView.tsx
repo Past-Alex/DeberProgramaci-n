@@ -4,7 +4,7 @@ import { colorStyles, DEFAULT_BLOG_POSTS } from '../utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { ConfirmModal } from './ConfirmModal';
 import { createClient } from '@/utils/supabase/client';
-import { BookOpen, Heart, Library, LogOut, Plus, Trash2, UploadCloud, Users, X } from 'lucide-react';
+import { BookOpen, Heart, Library, LogOut, Plus, Trash2, UploadCloud, Users, X, Edit2 } from 'lucide-react';
 
 interface CoachViewProps {
   user: User;
@@ -46,19 +46,15 @@ export const CoachView: React.FC<CoachViewProps> = ({ user, onLogout }) => {
   const colors: HabitColor[] = ['rose', 'amber', 'emerald', 'sky', 'violet', 'stone'];
 
   // For blog
-  const [blogPosts, setBlogPosts] = useState<BlogPost[]>(() => {
-    const saved = localStorage.getItem('aesthetic-blog');
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      return parsed.length > 0 ? parsed : DEFAULT_BLOG_POSTS;
-    }
-    return DEFAULT_BLOG_POSTS;
-  });
+  const [blogPosts, setBlogPosts] = useState<BlogPost[]>([]);
   const [postTitle, setPostTitle] = useState('');
   const [postContent, setPostContent] = useState('');
   const [postImage, setPostImage] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const [selectedPost, setSelectedPost] = useState<BlogPost | null>(null);
+  const [postToEdit, setPostToEdit] = useState<BlogPost | null>(null);
+  const [editPostTitle, setEditPostTitle] = useState('');
+  const [editPostContent, setEditPostContent] = useState('');
   const [commentText, setCommentText] = useState('');
   const [templateToDelete, setTemplateToDelete] = useState<string | null>(null);
   const [postToDelete, setPostToDelete] = useState<string | null>(null);
@@ -105,12 +101,34 @@ export const CoachView: React.FC<CoachViewProps> = ({ user, onLogout }) => {
   }, [activeTab]);
 
   useEffect(() => {
-    localStorage.setItem('aesthetic-templates', JSON.stringify(templates));
-  }, [templates]);
+    const fetchBlog = async () => {
+      const supabase = createClient();
+      const { data: blogData } = await supabase
+        .from('blog_posts')
+        .select('*')
+        .order('created_at', { ascending: false });
+        
+      if (blogData) {
+        setBlogPosts(blogData.map(p => ({
+          id: p.id,
+          title: p.title,
+          content: p.content,
+          author_id: p.author_id,
+          authorName: p.author_name,
+          date: p.date,
+          likes: p.likes,
+          imageUrl: p.image_url,
+          likedBy: p.liked_by || [],
+          comments: p.comments || []
+        })));
+      }
+    };
+    fetchBlog();
+  }, [activeTab]);
 
   useEffect(() => {
-    localStorage.setItem('aesthetic-blog', JSON.stringify(blogPosts));
-  }, [blogPosts]);
+    localStorage.setItem('aesthetic-templates', JSON.stringify(templates));
+  }, [templates]);
 
   const handleAddTemplate = (e: React.FormEvent) => {
     e.preventDefault();
@@ -169,36 +187,75 @@ export const CoachView: React.FC<CoachViewProps> = ({ user, onLogout }) => {
     reader.readAsDataURL(file);
   };
 
-  const handleAddPost = (e: React.FormEvent) => {
+  const handleAddPost = async (e: React.FormEvent) => {
     e.preventDefault();
     if (postTitle.trim() && postContent.trim()) {
       const imageToUse = postImage || UNSPLASH_IMAGES[Math.floor(Math.random() * UNSPLASH_IMAGES.length)];
-      const newPost: BlogPost = {
-        id: crypto.randomUUID(),
+      
+      const newPostData = {
         title: postTitle.trim(),
         content: postContent.trim(),
-        authorName: user.name,
+        author_id: user.id,
+        author_name: user.name || 'Coach',
         date: new Date().toLocaleDateString('es-ES', { year: 'numeric', month: 'short', day: 'numeric' }),
         likes: 0,
-        likedBy: [],
-        imageUrl: imageToUse
+        liked_by: [],
+        comments: [],
+        image_url: imageToUse
       };
-      setBlogPosts([newPost, ...blogPosts]);
+      
+      const supabase = createClient();
+      const { data, error } = await supabase.from('blog_posts').insert(newPostData).select().single();
+      if (!error && data) {
+        const newPost: BlogPost = {
+          id: data.id,
+          title: data.title,
+          content: data.content,
+          author_id: data.author_id,
+          authorName: data.author_name,
+          date: data.date,
+          likes: data.likes,
+          likedBy: data.liked_by,
+          comments: data.comments,
+          imageUrl: data.image_url
+        };
+        setBlogPosts([newPost, ...blogPosts]);
+      }
       setPostTitle('');
       setPostContent('');
       setPostImage(null);
     }
   };
 
-  const handleDeletePost = (id: string) => {
+  const handleEditPostSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (postToEdit && editPostTitle.trim() && editPostContent.trim()) {
+      const supabase = createClient();
+      await supabase.from('blog_posts').update({
+        title: editPostTitle.trim(),
+        content: editPostContent.trim()
+      }).eq('id', postToEdit.id);
+      
+      const updatedP = { ...postToEdit, title: editPostTitle.trim(), content: editPostContent.trim() };
+      setBlogPosts(blogPosts.map(p => p.id === postToEdit.id ? updatedP : p));
+      if (selectedPost?.id === postToEdit.id) setSelectedPost(updatedP);
+      setPostToEdit(null);
+    }
+  };
+
+  const handleDeletePost = async (id: string) => {
+    const supabase = createClient();
+    await supabase.from('blog_posts').delete().eq('id', id);
     setBlogPosts(blogPosts.filter(p => p.id !== id));
   };
 
-  const handleAddComment = (e: React.FormEvent, postId: string) => {
+  const handleAddComment = async (e: React.FormEvent, postId: string) => {
     e.preventDefault();
     if (!commentText.trim()) return;
     
-    let updatedSelectedPost: BlogPost | null = null;
+    const post = blogPosts.find(p => p.id === postId);
+    if (!post) return;
+    
     const newComment = {
       id: crypto.randomUUID(),
       authorName: user.name,
@@ -206,33 +263,29 @@ export const CoachView: React.FC<CoachViewProps> = ({ user, onLogout }) => {
       date: new Date().toLocaleDateString('es-ES', { year: 'numeric', month: 'short', day: 'numeric' })
     };
 
-    const updatedPosts = blogPosts.map(p => {
-      if (p.id === postId) {
-        const updatedP = { ...p, comments: [...(p.comments || []), newComment] };
-        if (selectedPost?.id === postId) updatedSelectedPost = updatedP;
-        return updatedP;
-      }
-      return p;
-    });
+    const newComments = [...(post.comments || []), newComment];
+    const supabase = createClient();
+    await supabase.from('blog_posts').update({ comments: newComments }).eq('id', postId);
 
+    const updatedP = { ...post, comments: newComments };
+    const updatedPosts = blogPosts.map(p => p.id === postId ? updatedP : p);
     setBlogPosts(updatedPosts);
-    if (updatedSelectedPost) setSelectedPost(updatedSelectedPost);
+    if (selectedPost?.id === postId) setSelectedPost(updatedP);
     setCommentText('');
   };
 
-  const handleDeleteComment = (postId: string, commentId: string) => {
-    let updatedSelectedPost: BlogPost | null = null;
-    const updatedPosts = blogPosts.map(p => {
-      if (p.id === postId) {
-        const updatedP = { ...p, comments: (p.comments || []).filter(c => c.id !== commentId) };
-        if (selectedPost?.id === postId) updatedSelectedPost = updatedP;
-        return updatedP;
-      }
-      return p;
-    });
+  const handleDeleteComment = async (postId: string, commentId: string) => {
+    const post = blogPosts.find(p => p.id === postId);
+    if (!post) return;
+    
+    const newComments = (post.comments || []).filter(c => c.id !== commentId);
+    const supabase = createClient();
+    await supabase.from('blog_posts').update({ comments: newComments }).eq('id', postId);
 
+    const updatedP = { ...post, comments: newComments };
+    const updatedPosts = blogPosts.map(p => p.id === postId ? updatedP : p);
     setBlogPosts(updatedPosts);
-    if (updatedSelectedPost) setSelectedPost(updatedSelectedPost);
+    if (selectedPost?.id === postId) setSelectedPost(updatedP);
   };
 
   return (
@@ -581,12 +634,24 @@ export const CoachView: React.FC<CoachViewProps> = ({ user, onLogout }) => {
                                 <span>{post.date}</span>
                               </div>
                             </div>
-                            <button 
-                              onClick={() => setPostToDelete(post.id)}
-                              className="opacity-0 group-hover:opacity-100 transition-opacity p-2 text-stone-400 hover:text-red-500 hover:bg-red-50 rounded-full"
-                            >
-                              <Trash2 size={16} />
-                            </button>
+                            <div className="flex gap-2">
+                              {user.id === post.author_id && (
+                                <button 
+                                  onClick={(e) => { e.stopPropagation(); setEditPostTitle(post.title); setEditPostContent(post.content); setPostToEdit(post); }}
+                                  className="opacity-0 group-hover:opacity-100 transition-opacity p-2 text-stone-400 hover:text-blue-500 hover:bg-blue-50 rounded-full"
+                                  title="Editar publicación"
+                                >
+                                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                                </button>
+                              )}
+                              <button 
+                                onClick={() => setPostToDelete(post.id)}
+                                className="opacity-0 group-hover:opacity-100 transition-opacity p-2 text-stone-400 hover:text-red-500 hover:bg-red-50 rounded-full"
+                                title="Eliminar publicación"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </div>
                           </div>
                           <p className="font-outfit text-stone-600 text-sm whitespace-pre-wrap line-clamp-3">{post.content}</p>
                           <button 
@@ -654,13 +719,24 @@ export const CoachView: React.FC<CoachViewProps> = ({ user, onLogout }) => {
                       <span>{selectedPost.date}</span>
                     </div>
                   </div>
-                  <button 
-                    onClick={() => setPostToDelete(selectedPost.id)}
-                    className="text-stone-400 hover:text-red-500 hover:bg-red-50 p-3 rounded-full transition-colors shrink-0"
-                    title="Eliminar publicación"
-                  >
-                    <Trash2 size={20} />
-                  </button>
+                  <div className="flex gap-2">
+                    {user.id === selectedPost.author_id && (
+                      <button 
+                        onClick={() => { setEditPostTitle(selectedPost.title); setEditPostContent(selectedPost.content); setPostToEdit(selectedPost); setSelectedPost(null); }}
+                        className="text-stone-400 hover:text-blue-500 hover:bg-blue-50 p-3 rounded-full transition-colors shrink-0"
+                        title="Editar publicación"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                      </button>
+                    )}
+                    <button 
+                      onClick={() => setPostToDelete(selectedPost.id)}
+                      className="text-stone-400 hover:text-red-500 hover:bg-red-50 p-3 rounded-full transition-colors shrink-0"
+                      title="Eliminar publicación"
+                    >
+                      <Trash2 size={20} />
+                    </button>
+                  </div>
                 </div>
                 
                 <div className="w-full h-px bg-stone-100" />
@@ -759,6 +835,72 @@ export const CoachView: React.FC<CoachViewProps> = ({ user, onLogout }) => {
         onClose={() => setLogoutConfirm(false)}
         onConfirm={onLogout}
       />
+
+      <AnimatePresence>
+        {postToEdit && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-stone-900/40 backdrop-blur-sm"
+              onClick={() => setPostToEdit(null)}
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative w-full max-w-2xl bg-white rounded-3xl shadow-xl p-8"
+            >
+              <button 
+                onClick={() => setPostToEdit(null)}
+                className="absolute top-4 right-4 p-2 bg-white/80 backdrop-blur-md rounded-full text-stone-600 hover:text-stone-900 hover:bg-stone-100 z-10 transition-colors shadow-sm"
+              >
+                <X size={20} />
+              </button>
+              
+              <h2 className="font-playfair text-2xl text-stone-800 mb-6">Editar Publicación</h2>
+              <form onSubmit={handleEditPostSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-stone-600 mb-1.5 font-outfit">Título</label>
+                  <input
+                    type="text"
+                    value={editPostTitle}
+                    onChange={(e) => setEditPostTitle(e.target.value)}
+                    className="w-full px-4 py-2.5 rounded-xl border border-stone-200 bg-stone-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-stone-200 font-outfit text-sm"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-stone-600 mb-1.5 font-outfit">Contenido</label>
+                  <textarea
+                    value={editPostContent}
+                    onChange={(e) => setEditPostContent(e.target.value)}
+                    className="w-full px-4 py-2.5 rounded-xl border border-stone-200 bg-stone-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-stone-200 font-outfit text-sm resize-none h-40"
+                    required
+                  />
+                </div>
+                <div className="flex justify-end pt-4 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPostToEdit(null)}
+                    className="px-6 py-2.5 rounded-xl bg-stone-100 text-stone-600 font-outfit font-medium transition-colors hover:bg-stone-200"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={!editPostTitle.trim() || !editPostContent.trim()}
+                    className="px-6 py-2.5 rounded-xl bg-stone-800 text-white font-outfit font-medium transition-colors hover:bg-stone-700 disabled:opacity-50"
+                  >
+                    Guardar Cambios
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
