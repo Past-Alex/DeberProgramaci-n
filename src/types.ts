@@ -25,6 +25,7 @@ export interface HabitTemplate {
 
 export interface Comment {
   id: string;
+  author_id: string;
   authorName: string;
   content: string;
   date: string;

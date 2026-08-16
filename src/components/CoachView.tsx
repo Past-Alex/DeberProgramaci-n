@@ -258,6 +258,7 @@ export const CoachView: React.FC<CoachViewProps> = ({ user, onLogout }) => {
     
     const newComment = {
       id: crypto.randomUUID(),
+      author_id: user.id,
       authorName: user.name,
       content: commentText.trim(),
       date: new Date().toLocaleDateString('es-ES', { year: 'numeric', month: 'short', day: 'numeric' })

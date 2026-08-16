@@ -352,6 +352,7 @@ export default function App({ initialUser }: { initialUser: User }) {
     
     const newComment = {
       id: crypto.randomUUID(),
+      author_id: currentUser.id,
       authorName: currentUser.name,
       content: commentText.trim(),
       date: new Date().toLocaleDateString('es-ES', { year: 'numeric', month: 'short', day: 'numeric' })

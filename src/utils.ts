@@ -1,4 +1,4 @@
-import { Habit, HabitColor } from './types';
+import { Habit, HabitColor, BlogPost } from './types';
 
 // Devuelve una fecha en formato YYYY-MM-DD según la zona horaria local
 export function formatDate(date: Date): string {
@@ -128,6 +128,7 @@ export const DEFAULT_BLOG_POSTS: BlogPost[] = [
     id: 'mock-1',
     title: 'El poder de los microhábitos',
     content: 'Muchas veces intentamos cambiar nuestra vida de un día para otro con metas gigantes. Sin embargo, la ciencia demuestra que empezar con "microhábitos" —acciones tan pequeñas que es imposible fallar— es la clave del éxito a largo plazo. \n\nPor ejemplo, en lugar de intentar leer un libro por semana, empieza por leer solo una página al día. La consistencia crea la identidad, y la identidad transforma el comportamiento.',
+    author_id: 'coach-1',
     authorName: 'Coach Elena',
     date: '12 ago 2026',
     likes: 24,
@@ -139,6 +140,7 @@ export const DEFAULT_BLOG_POSTS: BlogPost[] = [
     id: 'mock-2',
     title: 'La importancia de la luz matutina',
     content: 'Exponer tus ojos a la luz natural del sol durante los primeros 30 a 60 minutos después de despertar es uno de los mejores hábitos que puedes incorporar. \n\nEsto ajusta tu ritmo circadiano, mejorando no solo tus niveles de energía y estado de ánimo durante el día, sino también la calidad de tu sueño por la noche.',
+    author_id: 'coach-2',
     authorName: 'Coach Marcos',
     date: '10 ago 2026',
     likes: 18,

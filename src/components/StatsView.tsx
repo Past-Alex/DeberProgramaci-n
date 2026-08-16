@@ -110,7 +110,7 @@ export const StatsView: React.FC<StatsViewProps> = ({ habits }) => {
                   boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
                   fontFamily: 'Outfit'
                 }}
-                formatter={(value: number) => [`${Math.round(value)}%`, 'Completado']}
+                formatter={(value: any) => [`${Math.round(value)}%`, 'Completado']}
                 labelStyle={{ color: '#78716c', fontWeight: 500, marginBottom: '4px' }}
               />
               <Bar 
