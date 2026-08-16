@@ -44,7 +44,7 @@ export default async function HabitoPage({ params }: { params: { id: string } })
 
   return (
     <div className="min-h-screen bg-[#FDFCF8] p-5">
-      <div className="max-w-3xl mx-auto pt-10">
+      <div className="max-w-5xl mx-auto pt-10">
         <Link href="/dashboard" className="inline-flex items-center gap-2 text-stone-500 hover:text-stone-800 mb-8 font-outfit transition-colors">
           <ArrowLeft size={18} />
           <span>Volver al Dashboard</span>

@@ -9,6 +9,7 @@ import { StatsView } from './components/StatsView';
 import LoginPage from './app/login/page';
 import { CoachView } from './components/CoachView';
 import { ConfirmModal } from './components/ConfirmModal';
+import { MotivationalToast } from './components/MotivationalToast';
 import { getToday, colorStyles, DEFAULT_BLOG_POSTS } from './utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, Sparkles, LayoutDashboard, ListTodo, BarChart3, LogOut, Download, BookOpen, Heart, Image as ImageIcon, UploadCloud, X, Trash2, UserCircle, Globe, Check } from 'lucide-react';
@@ -352,7 +353,7 @@ export default function App({ initialUser }: { initialUser: User }) {
 
   return (
     <div className="min-h-screen bg-[#FDFCF8] selection:bg-stone-200">
-      <div className="max-w-3xl mx-auto px-5 py-12 md:py-20">
+      <div className="max-w-5xl mx-auto px-5 py-12 md:py-20">
         
         {/* Header */}
         <header className="mb-10 flex flex-col md:flex-row md:items-end justify-between gap-6">
@@ -780,6 +781,8 @@ export default function App({ initialUser }: { initialUser: User }) {
           </motion.div>
         )}
       </AnimatePresence>
+
+      <MotivationalToast />
 
       <AnimatePresence>
         {selectedPost && (
