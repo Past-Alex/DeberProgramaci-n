@@ -16,6 +16,13 @@ export default function LoginPage() {
   const router = useRouter();
   const supabase = createClient();
 
+  React.useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('error') === 'account_deleted') {
+      setError('Tu cuenta ha sido desactivada o eliminada.');
+    }
+  }, []);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);

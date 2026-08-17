@@ -1,4 +1,4 @@
-import { Habit, HabitColor, BlogPost } from './types';
+import { Habit, HabitColor, BlogPost, ReactionType } from './types';
 
 // Devuelve una fecha en formato YYYY-MM-DD según la zona horaria local
 export function formatDate(date: Date): string {
@@ -149,3 +149,65 @@ export const DEFAULT_BLOG_POSTS: BlogPost[] = [
     comments: []
   }
 ];
+
+export const playLikeSound = () => {
+  try {
+    const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioContext) return;
+    const ctx = new AudioContext();
+    const osc = ctx.createOscillator();
+    const gainNode = ctx.createGain();
+    
+    // A pleasant soft pop
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(400, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(800, ctx.currentTime + 0.1);
+    
+    gainNode.gain.setValueAtTime(0.2, ctx.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.1);
+    
+    osc.connect(gainNode);
+    gainNode.connect(ctx.destination);
+    
+    osc.start();
+    osc.stop(ctx.currentTime + 0.1);
+  } catch (e) {
+    // Ignore any audio context errors
+  }
+};
+
+export const REACTIONS: { type: ReactionType; emoji: string; label: string; color: string; bg: string }[] = [
+  { type: 'like', emoji: '👍', label: 'Me gusta', color: 'text-blue-500', bg: 'bg-blue-50' },
+  { type: 'love', emoji: '❤️', label: 'Me encanta', color: 'text-rose-500', bg: 'bg-rose-50' },
+  { type: 'haha', emoji: '😂', label: 'Me divierte', color: 'text-amber-500', bg: 'bg-amber-50' },
+  { type: 'wow', emoji: '😮', label: 'Me asombra', color: 'text-amber-500', bg: 'bg-amber-50' },
+  { type: 'sad', emoji: '😢', label: 'Me entristece', color: 'text-amber-500', bg: 'bg-amber-50' },
+  { type: 'angry', emoji: '😡', label: 'Me enoja', color: 'text-orange-500', bg: 'bg-orange-50' }
+];
+
+export const parseUserReaction = (likedBy: string[], userId: string): ReactionType | null => {
+  if (!likedBy) return null;
+  const match = likedBy.find(item => item.startsWith(`${userId}:`));
+  if (match) {
+    return match.split(':')[1] as ReactionType;
+  }
+  // Backwards compatibility for plain user ids
+  if (likedBy.includes(userId)) {
+    return 'like';
+  }
+  return null;
+};
+
+export const getReactionsCount = (likedBy: string[]): Record<ReactionType, number> => {
+  const counts: Record<ReactionType, number> = { like: 0, love: 0, haha: 0, wow: 0, sad: 0, angry: 0 };
+  if (!likedBy) return counts;
+  likedBy.forEach(item => {
+    if (item.includes(':')) {
+      const type = item.split(':')[1] as ReactionType;
+      if (counts[type] !== undefined) counts[type]++;
+    } else {
+      counts.like++;
+    }
+  });
+  return counts;
+};

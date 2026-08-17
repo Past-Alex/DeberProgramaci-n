@@ -1,24 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { HabitTemplate, HabitColor, User, BlogPost } from '../types';
-import { colorStyles, DEFAULT_BLOG_POSTS } from '../utils';
+import { HabitTemplate, HabitColor, User, BlogPost, ReactionType } from '../types';
+import { colorStyles, DEFAULT_BLOG_POSTS, playLikeSound, parseUserReaction, getReactionsCount, REACTIONS } from '../utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { ConfirmModal } from './ConfirmModal';
 import { createClient } from '@/utils/supabase/client';
-import { BookOpen, Heart, Library, LogOut, Plus, Trash2, UploadCloud, Users, X, Edit2 } from 'lucide-react';
+import { updateAdoptedHabits } from '../app/actions';
+import { BookOpen, Heart, Library, LogOut, Plus, Trash2, UploadCloud, Users, X, Edit2, Check } from 'lucide-react';
 
 interface CoachViewProps {
   user: User;
   onLogout: () => void;
 }
-
-const UNSPLASH_IMAGES = [
-  'https://images.unsplash.com/photo-1517842645767-c639042777db?q=80&w=800&auto=format&fit=crop',
-  'https://images.unsplash.com/photo-1544947950-fa07a98d237f?q=80&w=800&auto=format&fit=crop',
-  'https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?q=80&w=800&auto=format&fit=crop',
-  'https://images.unsplash.com/photo-1476480862126-209bfaa8edc8?q=80&w=800&auto=format&fit=crop',
-  'https://images.unsplash.com/photo-1490645935967-10de6ba17061?q=80&w=800&auto=format&fit=crop',
-  'https://images.unsplash.com/photo-1472396961693-142e6e269027?q=80&w=800&auto=format&fit=crop'
-];
 
 export const CoachView: React.FC<CoachViewProps> = ({ user, onLogout }) => {
   const [templates, setTemplates] = useState<HabitTemplate[]>(() => {
@@ -38,7 +30,7 @@ export const CoachView: React.FC<CoachViewProps> = ({ user, onLogout }) => {
   });
 
   const [activeTab, setActiveTab] = useState<'templates' | 'students' | 'blog'>('templates');
-  
+
   // For new template
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -57,8 +49,22 @@ export const CoachView: React.FC<CoachViewProps> = ({ user, onLogout }) => {
   const [editPostContent, setEditPostContent] = useState('');
   const [commentText, setCommentText] = useState('');
   const [templateToDelete, setTemplateToDelete] = useState<string | null>(null);
+  const [studentToDelete, setStudentToDelete] = useState<string | null>(null);
+  const [templateToEdit, setTemplateToEdit] = useState<HabitTemplate | null>(null);
+  const [editTemplateName, setEditTemplateName] = useState('');
+  const [editTemplateOldName, setEditTemplateOldName] = useState('');
+  const [editTemplateDesc, setEditTemplateDesc] = useState('');
+  const [editTemplateColor, setEditTemplateColor] = useState<HabitColor>('rose');
   const [postToDelete, setPostToDelete] = useState<string | null>(null);
   const [logoutConfirm, setLogoutConfirm] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (toastMessage) {
+      const timer = setTimeout(() => setToastMessage(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [toastMessage]);
 
   // Real students state
   const [students, setStudents] = useState<any[]>([]);
@@ -68,7 +74,7 @@ export const CoachView: React.FC<CoachViewProps> = ({ user, onLogout }) => {
     const fetchStudents = async () => {
       setLoadingStudents(true);
       const supabase = createClient();
-      
+
       const { data: profilesData } = await supabase
         .from('profiles')
         .select('*')
@@ -77,12 +83,12 @@ export const CoachView: React.FC<CoachViewProps> = ({ user, onLogout }) => {
       if (profilesData && profilesData.length > 0) {
         const { data: habitsData } = await supabase.from('habits').select('id, user_id');
         const { data: allLogs } = await supabase.from('habit_logs').select('habit_id');
-        
+
         const studentsList = profilesData.map(profile => {
           const userHabits = (habitsData || []).filter(h => h.user_id === profile.id);
           const userHabitIds = userHabits.map(h => h.id);
           const userLogsCount = (allLogs || []).filter(l => userHabitIds.includes(l.habit_id)).length;
-          
+
           return {
             id: profile.id,
             name: profile.name,
@@ -107,7 +113,7 @@ export const CoachView: React.FC<CoachViewProps> = ({ user, onLogout }) => {
         .from('blog_posts')
         .select('*')
         .order('created_at', { ascending: false });
-        
+
       if (blogData) {
         setBlogPosts(blogData.map(p => ({
           id: p.id,
@@ -150,6 +156,44 @@ export const CoachView: React.FC<CoachViewProps> = ({ user, onLogout }) => {
     setTemplates(templates.filter(t => t.id !== id));
   };
 
+  const handleOpenEditTemplate = (template: HabitTemplate) => {
+    setTemplateToEdit(template);
+    setEditTemplateOldName(template.name);
+    setEditTemplateName(template.name);
+    setEditTemplateDesc(template.description);
+    setEditTemplateColor(template.color);
+  };
+
+  const handleEditTemplateSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!templateToEdit || !editTemplateName.trim()) return;
+
+    const updatedTemplate = {
+      ...templateToEdit,
+      name: editTemplateName.trim(),
+      description: editTemplateDesc.trim(),
+      color: editTemplateColor
+    };
+
+    const updatedTemplates = templates.map(t => t.id === templateToEdit.id ? updatedTemplate : t);
+    setTemplates(updatedTemplates);
+
+    try {
+      await updateAdoptedHabits(editTemplateOldName, editTemplateName.trim(), editTemplateColor);
+    } catch (err) {
+      console.error("Failed to update adopted habits", err);
+    }
+
+    setTemplateToEdit(null);
+  };
+
+  const handleDeleteStudent = async (id: string) => {
+    const supabase = createClient();
+    await supabase.from('profiles').delete().eq('id', id);
+    setStudents(students.filter(s => s.id !== id));
+    setStudentToDelete(null);
+  };
+
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -190,8 +234,20 @@ export const CoachView: React.FC<CoachViewProps> = ({ user, onLogout }) => {
   const handleAddPost = async (e: React.FormEvent) => {
     e.preventDefault();
     if (postTitle.trim() && postContent.trim()) {
-      const imageToUse = postImage || UNSPLASH_IMAGES[Math.floor(Math.random() * UNSPLASH_IMAGES.length)];
-      
+      let imageToUse = postImage;
+      if (!imageToUse) {
+        try {
+          const res = await fetch('https://random.imagecdn.app/v1/image?width=800&height=600&category=nature&format=json');
+          if (res.ok) {
+            const data = await res.json();
+            imageToUse = data.url;
+          }
+        } catch (error) {
+          console.error('Error fetching random image:', error);
+          imageToUse = 'https://images.unsplash.com/photo-1517842645767-c639042777db?q=80&w=800&auto=format&fit=crop';
+        }
+      }
+
       const newPostData = {
         title: postTitle.trim(),
         content: postContent.trim(),
@@ -203,7 +259,7 @@ export const CoachView: React.FC<CoachViewProps> = ({ user, onLogout }) => {
         comments: [],
         image_url: imageToUse
       };
-      
+
       const supabase = createClient();
       const { data, error } = await supabase.from('blog_posts').insert(newPostData).select().single();
       if (!error && data) {
@@ -220,10 +276,44 @@ export const CoachView: React.FC<CoachViewProps> = ({ user, onLogout }) => {
           imageUrl: data.image_url
         };
         setBlogPosts([newPost, ...blogPosts]);
+        setToastMessage('Post correctamente publicado');
       }
       setPostTitle('');
       setPostContent('');
       setPostImage(null);
+    }
+  };
+
+  const handleLikePost = async (postId: string, reactionType: ReactionType = 'like') => {
+    const post = blogPosts.find(p => p.id === postId);
+    if (!post) return;
+    
+    const currentLikedBy = post.likedBy || [];
+    const existingReaction = parseUserReaction(currentLikedBy, user.id);
+    
+    let newLikedBy = currentLikedBy.filter(item => {
+      if (item === user.id) return false;
+      if (item.startsWith(`${user.id}:`)) return false;
+      return true;
+    });
+
+    if (existingReaction === reactionType) {
+      // Toggle off
+    } else {
+      newLikedBy.push(`${user.id}:${reactionType}`);
+      playLikeSound();
+    }
+    
+    const newLikes = newLikedBy.length;
+      
+    const supabase = createClient();
+    await supabase.from('blog_posts').update({ likes: newLikes, liked_by: newLikedBy }).eq('id', postId);
+
+    const updatedP = { ...post, likes: newLikes, likedBy: newLikedBy };
+    const updatedPosts = blogPosts.map(p => p.id === postId ? updatedP : p);
+    setBlogPosts(updatedPosts);
+    if (selectedPost?.id === postId) {
+      setSelectedPost(updatedP);
     }
   };
 
@@ -235,7 +325,7 @@ export const CoachView: React.FC<CoachViewProps> = ({ user, onLogout }) => {
         title: editPostTitle.trim(),
         content: editPostContent.trim()
       }).eq('id', postToEdit.id);
-      
+
       const updatedP = { ...postToEdit, title: editPostTitle.trim(), content: editPostContent.trim() };
       setBlogPosts(blogPosts.map(p => p.id === postToEdit.id ? updatedP : p));
       if (selectedPost?.id === postToEdit.id) setSelectedPost(updatedP);
@@ -252,10 +342,10 @@ export const CoachView: React.FC<CoachViewProps> = ({ user, onLogout }) => {
   const handleAddComment = async (e: React.FormEvent, postId: string) => {
     e.preventDefault();
     if (!commentText.trim()) return;
-    
+
     const post = blogPosts.find(p => p.id === postId);
     if (!post) return;
-    
+
     const newComment = {
       id: crypto.randomUUID(),
       author_id: user.id,
@@ -278,7 +368,7 @@ export const CoachView: React.FC<CoachViewProps> = ({ user, onLogout }) => {
   const handleDeleteComment = async (postId: string, commentId: string) => {
     const post = blogPosts.find(p => p.id === postId);
     if (!post) return;
-    
+
     const newComments = (post.comments || []).filter(c => c.id !== commentId);
     const supabase = createClient();
     await supabase.from('blog_posts').update({ comments: newComments }).eq('id', postId);
@@ -292,11 +382,11 @@ export const CoachView: React.FC<CoachViewProps> = ({ user, onLogout }) => {
   return (
     <div className="min-h-screen bg-[#FDFCF8] selection:bg-stone-200">
       <div className="max-w-5xl mx-auto px-5 py-12 md:py-20">
-        
+
         {/* Header */}
         <header className="mb-10 flex flex-col md:flex-row md:items-end justify-between gap-6">
           <div>
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
               className="flex items-center gap-2 text-stone-400 mb-2 font-outfit font-medium"
@@ -305,7 +395,7 @@ export const CoachView: React.FC<CoachViewProps> = ({ user, onLogout }) => {
               <span>•</span>
               <span>Hola, {user.name}</span>
             </motion.div>
-            <motion.h1 
+            <motion.h1
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.1 }}
@@ -314,7 +404,7 @@ export const CoachView: React.FC<CoachViewProps> = ({ user, onLogout }) => {
               Centro de Guiado
             </motion.h1>
           </div>
-          
+
           <motion.button
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
@@ -331,27 +421,24 @@ export const CoachView: React.FC<CoachViewProps> = ({ user, onLogout }) => {
         <nav className="flex flex-wrap gap-2 mb-10 p-1.5 bg-stone-100/50 rounded-2xl w-fit">
           <button
             onClick={() => setActiveTab('templates')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-outfit font-medium transition-all ${
-              activeTab === 'templates' ? 'bg-white text-stone-800 shadow-sm' : 'text-stone-500 hover:text-stone-700 hover:bg-stone-100/50'
-            }`}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-outfit font-medium transition-all ${activeTab === 'templates' ? 'bg-white text-stone-800 shadow-sm' : 'text-stone-500 hover:text-stone-700 hover:bg-stone-100/50'
+              }`}
           >
             <Library size={18} />
             <span>Plantillas</span>
           </button>
           <button
             onClick={() => setActiveTab('students')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-outfit font-medium transition-all ${
-              activeTab === 'students' ? 'bg-white text-stone-800 shadow-sm' : 'text-stone-500 hover:text-stone-700 hover:bg-stone-100/50'
-            }`}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-outfit font-medium transition-all ${activeTab === 'students' ? 'bg-white text-stone-800 shadow-sm' : 'text-stone-500 hover:text-stone-700 hover:bg-stone-100/50'
+              }`}
           >
             <Users size={18} />
             <span>Alumnos</span>
           </button>
           <button
             onClick={() => setActiveTab('blog')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-outfit font-medium transition-all ${
-              activeTab === 'blog' ? 'bg-white text-stone-800 shadow-sm' : 'text-stone-500 hover:text-stone-700 hover:bg-stone-100/50'
-            }`}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-outfit font-medium transition-all ${activeTab === 'blog' ? 'bg-white text-stone-800 shadow-sm' : 'text-stone-500 hover:text-stone-700 hover:bg-stone-100/50'
+              }`}
           >
             <BookOpen size={18} />
             <span>Blog Comunitario</span>
@@ -425,7 +512,7 @@ export const CoachView: React.FC<CoachViewProps> = ({ user, onLogout }) => {
                 {/* Templates List */}
                 <div className="lg:col-span-2 space-y-4">
                   <h2 className="font-outfit font-medium text-stone-400 uppercase tracking-widest text-xs mb-2">Plantillas Activas ({templates.length})</h2>
-                  
+
                   {templates.length === 0 ? (
                     <div className="text-center py-16 px-6 border border-dashed border-stone-200 rounded-3xl bg-stone-50/50">
                       <p className="font-outfit text-stone-400">No has creado plantillas todavía.</p>
@@ -434,7 +521,7 @@ export const CoachView: React.FC<CoachViewProps> = ({ user, onLogout }) => {
                     templates.map(template => {
                       const styles = colorStyles[template.color] || colorStyles.stone;
                       return (
-                        <motion.div 
+                        <motion.div
                           key={template.id}
                           initial={{ opacity: 0, y: 5 }}
                           animate={{ opacity: 1, y: 0 }}
@@ -449,12 +536,22 @@ export const CoachView: React.FC<CoachViewProps> = ({ user, onLogout }) => {
                               <p className="font-outfit text-stone-500 text-sm ml-5">{template.description}</p>
                             )}
                           </div>
-                          <button 
-                            onClick={() => setTemplateToDelete(template.id)}
-                            className="opacity-0 group-hover:opacity-100 transition-opacity p-2 text-stone-400 hover:text-red-500 hover:bg-red-50 rounded-full"
-                          >
-                            <Trash2 size={16} />
-                          </button>
+                          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button
+                              onClick={() => handleOpenEditTemplate(template)}
+                              className="p-2 text-stone-400 hover:text-blue-500 hover:bg-blue-50 rounded-full"
+                              title="Editar plantilla"
+                            >
+                              <Edit2 size={16} />
+                            </button>
+                            <button
+                              onClick={() => setTemplateToDelete(template.id)}
+                              className="p-2 text-stone-400 hover:text-red-500 hover:bg-red-50 rounded-full"
+                              title="Eliminar plantilla"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
                         </motion.div>
                       );
                     })
@@ -477,7 +574,7 @@ export const CoachView: React.FC<CoachViewProps> = ({ user, onLogout }) => {
                   <p className="font-outfit text-stone-500 max-w-md mx-auto mb-6">
                     Aquí puedes ver el progreso de los alumnos registrados en la plataforma.
                   </p>
-                  
+
                   {loadingStudents ? (
                     <div className="py-10 text-stone-400 flex flex-col items-center">
                       <svg className="animate-spin h-8 w-8 text-stone-300 mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -493,19 +590,26 @@ export const CoachView: React.FC<CoachViewProps> = ({ user, onLogout }) => {
                   ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-left">
                       {students.map(student => (
-                        <div key={student.id} className="p-5 border border-stone-100 rounded-2xl bg-stone-50 hover:shadow-sm transition-shadow">
-                          <div className="font-outfit font-medium text-stone-800 text-lg mb-1">{student.name || 'Usuario'}</div>
+                        <div key={student.id} className="p-5 border border-stone-100 rounded-2xl bg-stone-50 hover:shadow-sm transition-shadow relative">
+                          <button
+                            onClick={() => setStudentToDelete(student.id)}
+                            className="absolute top-4 right-4 text-stone-400 hover:text-red-500 hover:bg-red-50 p-1.5 rounded-full transition-colors"
+                            title="Eliminar estudiante"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                          <div className="font-outfit font-medium text-stone-800 text-lg mb-1 pr-8">{student.name || 'Usuario'}</div>
                           <div className="text-sm text-stone-500 mb-3">
                             {student.totalHabits} hábitos creados
                           </div>
-                          
+
                           <div className="text-xs text-stone-400 mb-1.5 flex justify-between">
                             <span>Progreso total</span>
                             <span className="font-medium text-emerald-600">{student.totalCompletions} completados</span>
                           </div>
                           <div className="w-full bg-stone-200 rounded-full h-1.5">
-                            <div 
-                              className="bg-emerald-400 h-1.5 rounded-full transition-all" 
+                            <div
+                              className="bg-emerald-400 h-1.5 rounded-full transition-all"
                               style={{ width: `${Math.min(100, (student.totalCompletions / (student.totalHabits * 7 || 1)) * 100)}%` }}
                             ></div>
                           </div>
@@ -552,25 +656,25 @@ export const CoachView: React.FC<CoachViewProps> = ({ user, onLogout }) => {
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-stone-600 mb-1.5 font-outfit">Imagen (Opcional)</label>
-                        <div 
+                        <div
                           className={`relative w-full h-32 rounded-xl border-2 border-dashed flex flex-col items-center justify-center overflow-hidden transition-colors ${dragActive ? 'border-stone-800 bg-stone-100/50' : 'border-stone-200 bg-stone-50 hover:bg-stone-100/50'}`}
                           onDragEnter={handleDrag}
                           onDragLeave={handleDrag}
                           onDragOver={handleDrag}
                           onDrop={handleDrop}
                         >
-                          <input 
-                            type="file" 
-                            accept="image/*" 
+                          <input
+                            type="file"
+                            accept="image/*"
                             onChange={handleImageChange}
                             className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
                           />
-                          
+
                           {postImage ? (
                             <div className="absolute inset-0 w-full h-full group">
                               <img src={postImage} alt="Preview" className="w-full h-full object-cover" />
                               <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                <button 
+                                <button
                                   type="button"
                                   onClick={(e) => { e.preventDefault(); setPostImage(null); }}
                                   className="p-2 bg-white rounded-full text-stone-800 hover:scale-105 transition-transform z-20"
@@ -602,14 +706,18 @@ export const CoachView: React.FC<CoachViewProps> = ({ user, onLogout }) => {
                 {/* Posts List */}
                 <div className="lg:col-span-2 space-y-4">
                   <h2 className="font-outfit font-medium text-stone-400 uppercase tracking-widest text-xs mb-2">Comunidad (Moderación) ({blogPosts.length})</h2>
-                  
+
                   {blogPosts.length === 0 ? (
                     <div className="text-center py-16 px-6 border border-dashed border-stone-200 rounded-3xl bg-stone-50/50">
                       <p className="font-outfit text-stone-400">No hay publicaciones en la comunidad.</p>
                     </div>
                   ) : (
-                    blogPosts.map(post => (
-                      <motion.div 
+                    blogPosts.map(post => {
+                      const userReaction = parseUserReaction(post.likedBy || [], user.id);
+                      const totalReactions = (post.likedBy || []).length;
+                      const currentReactionConfig = userReaction ? REACTIONS.find(r => r.type === userReaction) : null;
+                      return (
+                      <motion.div
                         key={post.id}
                         initial={{ opacity: 0, y: 5 }}
                         animate={{ opacity: 1, y: 0 }}
@@ -617,9 +725,9 @@ export const CoachView: React.FC<CoachViewProps> = ({ user, onLogout }) => {
                       >
                         {post.imageUrl && (
                           <div className="h-48 w-full relative border-b border-stone-100">
-                            <img 
-                              src={post.imageUrl} 
-                              alt={post.title} 
+                            <img
+                              src={post.imageUrl}
+                              alt={post.title}
                               className="w-full h-full object-cover"
                               referrerPolicy="no-referrer"
                             />
@@ -637,7 +745,7 @@ export const CoachView: React.FC<CoachViewProps> = ({ user, onLogout }) => {
                             </div>
                             <div className="flex gap-2">
                               {user.id === post.author_id && (
-                                <button 
+                                <button
                                   onClick={(e) => { e.stopPropagation(); setEditPostTitle(post.title); setEditPostContent(post.content); setPostToEdit(post); }}
                                   className="opacity-0 group-hover:opacity-100 transition-opacity p-2 text-stone-400 hover:text-blue-500 hover:bg-blue-50 rounded-full"
                                   title="Editar publicación"
@@ -645,7 +753,7 @@ export const CoachView: React.FC<CoachViewProps> = ({ user, onLogout }) => {
                                   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
                                 </button>
                               )}
-                              <button 
+                              <button
                                 onClick={() => setPostToDelete(post.id)}
                                 className="opacity-0 group-hover:opacity-100 transition-opacity p-2 text-stone-400 hover:text-red-500 hover:bg-red-50 rounded-full"
                                 title="Eliminar publicación"
@@ -655,19 +763,57 @@ export const CoachView: React.FC<CoachViewProps> = ({ user, onLogout }) => {
                             </div>
                           </div>
                           <p className="font-outfit text-stone-600 text-sm whitespace-pre-wrap line-clamp-3">{post.content}</p>
-                          <button 
+                          <button
                             onClick={() => setSelectedPost(post)}
                             className="text-stone-800 font-medium text-sm font-outfit self-start hover:underline mt-1"
                           >
                             Leer artículo completo →
                           </button>
-                          <div className="flex items-center gap-1.5 text-rose-500 text-sm font-outfit font-medium mt-2">
-                            <Heart size={16} className={post.likes > 0 ? "fill-current" : ""} />
-                            <span>{post.likes}</span>
+                          <div className="relative group/reaction mt-2 flex items-center">
+                            {/* Hover Menu */}
+                            <div className="absolute bottom-full left-0 mb-2 hidden group-hover/reaction:flex bg-white rounded-full shadow-lg border border-stone-100 p-1.5 gap-1 transform transition-all z-10">
+                              {/* Bridge for hover gap */}
+                              <div className="absolute top-full left-0 w-full h-2" />
+                              {REACTIONS.map(reaction => (
+                                <button
+                                  key={reaction.type}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleLikePost(post.id, reaction.type);
+                                  }}
+                                  className="w-10 h-10 hover:scale-125 transition-transform duration-200 transform origin-bottom flex items-center justify-center text-2xl relative group/tooltip"
+                                >
+                                  {reaction.emoji}
+                                  <span className="absolute -top-8 bg-stone-800 text-white text-[10px] px-2 py-1 rounded-full opacity-0 group-hover/tooltip:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
+                                    {reaction.label}
+                                  </span>
+                                </button>
+                              ))}
+                            </div>
+
+                            {/* Main Button */}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleLikePost(post.id, userReaction ? userReaction : 'like');
+                              }}
+                              className={`flex items-center gap-2 px-4 py-2 rounded-full border transition-colors font-outfit text-sm font-medium ${
+                                userReaction 
+                                  ? `border-${currentReactionConfig?.color.replace('text-', '')}/30 ${currentReactionConfig?.bg} ${currentReactionConfig?.color}` 
+                                  : 'border-stone-200 text-stone-500 hover:text-stone-700 hover:bg-stone-50'
+                              }`}
+                            >
+                              {userReaction ? (
+                                <span className="text-lg leading-none">{currentReactionConfig?.emoji}</span>
+                              ) : (
+                                <Heart size={16} />
+                              )}
+                              <span>{totalReactions} {totalReactions === 1 ? 'Reacción' : 'Reacciones'}</span>
+                            </button>
                           </div>
                         </div>
                       </motion.div>
-                    ))
+                    )})
                   )}
                 </div>
               </motion.div>
@@ -679,7 +825,7 @@ export const CoachView: React.FC<CoachViewProps> = ({ user, onLogout }) => {
       <AnimatePresence>
         {selectedPost && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
@@ -692,24 +838,24 @@ export const CoachView: React.FC<CoachViewProps> = ({ user, onLogout }) => {
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
               className="relative w-full max-w-3xl max-h-[90vh] bg-white rounded-3xl shadow-xl overflow-y-auto flex flex-col"
             >
-              <button 
+              <button
                 onClick={() => setSelectedPost(null)}
                 className="absolute top-4 right-4 p-2 bg-white/80 backdrop-blur-md rounded-full text-stone-600 hover:text-stone-900 hover:bg-stone-100 z-10 transition-colors shadow-sm"
               >
                 <X size={20} />
               </button>
-              
+
               {selectedPost.imageUrl && (
                 <div className="h-64 md:h-80 w-full shrink-0 relative">
-                  <img 
-                    src={selectedPost.imageUrl} 
-                    alt={selectedPost.title} 
-                    className="w-full h-full object-cover" 
+                  <img
+                    src={selectedPost.imageUrl}
+                    alt={selectedPost.title}
+                    className="w-full h-full object-cover"
                     referrerPolicy="no-referrer"
                   />
                 </div>
               )}
-              
+
               <div className="p-8 md:p-10 flex flex-col gap-6">
                 <div className="flex items-start justify-between gap-4">
                   <div>
@@ -722,7 +868,7 @@ export const CoachView: React.FC<CoachViewProps> = ({ user, onLogout }) => {
                   </div>
                   <div className="flex gap-2">
                     {user.id === selectedPost.author_id && (
-                      <button 
+                      <button
                         onClick={() => { setEditPostTitle(selectedPost.title); setEditPostContent(selectedPost.content); setPostToEdit(selectedPost); setSelectedPost(null); }}
                         className="text-stone-400 hover:text-blue-500 hover:bg-blue-50 p-3 rounded-full transition-colors shrink-0"
                         title="Editar publicación"
@@ -730,7 +876,7 @@ export const CoachView: React.FC<CoachViewProps> = ({ user, onLogout }) => {
                         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
                       </button>
                     )}
-                    <button 
+                    <button
                       onClick={() => setPostToDelete(selectedPost.id)}
                       className="text-stone-400 hover:text-red-500 hover:bg-red-50 p-3 rounded-full transition-colors shrink-0"
                       title="Eliminar publicación"
@@ -739,23 +885,62 @@ export const CoachView: React.FC<CoachViewProps> = ({ user, onLogout }) => {
                     </button>
                   </div>
                 </div>
-                
+
                 <div className="w-full h-px bg-stone-100" />
-                
+
                 <p className="font-outfit text-stone-700 leading-relaxed whitespace-pre-wrap text-lg">
                   {selectedPost.content}
                 </p>
-                
-                <div className="mt-4 flex items-center gap-1.5 text-rose-500 font-outfit font-medium">
-                  <Heart size={20} className={selectedPost.likes > 0 ? "fill-current" : ""} />
-                  <span>{selectedPost.likes} {selectedPost.likes === 1 ? 'Me gusta' : 'Me gusta'}</span>
+
+                <div className="relative group/reaction mt-4 flex items-center">
+                  {(() => {
+                    const userReactionModal = parseUserReaction(selectedPost.likedBy || [], user.id);
+                    const totalReactionsModal = (selectedPost.likedBy || []).length;
+                    const currentReactionConfigModal = userReactionModal ? REACTIONS.find(r => r.type === userReactionModal) : null;
+                    return (
+                      <>
+                        <div className="absolute bottom-full left-0 mb-2 hidden group-hover/reaction:flex bg-white rounded-full shadow-lg border border-stone-100 p-1.5 gap-1 transform transition-all z-10">
+                          {/* Bridge for hover gap */}
+                          <div className="absolute top-full left-0 w-full h-2" />
+                          {REACTIONS.map(reaction => (
+                            <button
+                              key={reaction.type}
+                              onClick={() => handleLikePost(selectedPost.id, reaction.type)}
+                              className="w-10 h-10 hover:scale-125 transition-transform duration-200 transform origin-bottom flex items-center justify-center text-2xl relative group/tooltip"
+                            >
+                              {reaction.emoji}
+                              <span className="absolute -top-8 bg-stone-800 text-white text-[10px] px-2 py-1 rounded-full opacity-0 group-hover/tooltip:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
+                                {reaction.label}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+
+                        <button
+                          onClick={() => handleLikePost(selectedPost.id, userReactionModal ? userReactionModal : 'like')}
+                          className={`flex items-center gap-2 px-6 py-3 rounded-full border transition-colors font-outfit font-medium ${
+                            userReactionModal 
+                              ? `border-${currentReactionConfigModal?.color.replace('text-', '')}/30 ${currentReactionConfigModal?.bg} ${currentReactionConfigModal?.color}` 
+                              : 'border-stone-200 text-stone-500 hover:text-stone-700 hover:bg-stone-50'
+                          }`}
+                        >
+                          {userReactionModal ? (
+                            <span className="text-xl leading-none">{currentReactionConfigModal?.emoji}</span>
+                          ) : (
+                            <Heart size={20} />
+                          )}
+                          <span>{totalReactionsModal} {totalReactionsModal === 1 ? 'Reacción' : 'Reacciones'}</span>
+                        </button>
+                      </>
+                    );
+                  })()}
                 </div>
 
                 <div className="w-full h-px bg-stone-100 my-2" />
 
                 <div className="flex flex-col gap-6">
                   <h4 className="font-playfair text-xl text-stone-800">Comentarios ({(selectedPost.comments || []).length})</h4>
-                  
+
                   <div className="space-y-4">
                     {(selectedPost.comments || []).map((comment) => (
                       <div key={comment.id} className="bg-stone-50 p-4 rounded-2xl flex flex-col gap-2">
@@ -776,7 +961,7 @@ export const CoachView: React.FC<CoachViewProps> = ({ user, onLogout }) => {
                         <p className="font-outfit text-stone-600 text-sm whitespace-pre-wrap">{comment.content}</p>
                       </div>
                     ))}
-                    
+
                     {(selectedPost.comments || []).length === 0 && (
                       <p className="font-outfit text-stone-400 text-sm text-center py-4">Aún no hay comentarios. ¡Sé el primero en compartir tu opinión!</p>
                     )}
@@ -814,6 +999,14 @@ export const CoachView: React.FC<CoachViewProps> = ({ user, onLogout }) => {
       />
 
       <ConfirmModal
+        isOpen={!!studentToDelete}
+        title="Eliminar estudiante"
+        message="¿Estás seguro de que quieres eliminar a este estudiante? Perderá el acceso a la plataforma."
+        onClose={() => setStudentToDelete(null)}
+        onConfirm={() => studentToDelete && handleDeleteStudent(studentToDelete)}
+      />
+
+      <ConfirmModal
         isOpen={!!postToDelete}
         title="Eliminar publicación"
         message="¿Estás seguro de que quieres eliminar esta publicación de la comunidad? Esta acción no se puede deshacer."
@@ -840,7 +1033,7 @@ export const CoachView: React.FC<CoachViewProps> = ({ user, onLogout }) => {
       <AnimatePresence>
         {postToEdit && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
@@ -853,13 +1046,13 @@ export const CoachView: React.FC<CoachViewProps> = ({ user, onLogout }) => {
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
               className="relative w-full max-w-2xl bg-white rounded-3xl shadow-xl p-8"
             >
-              <button 
+              <button
                 onClick={() => setPostToEdit(null)}
                 className="absolute top-4 right-4 p-2 bg-white/80 backdrop-blur-md rounded-full text-stone-600 hover:text-stone-900 hover:bg-stone-100 z-10 transition-colors shadow-sm"
               >
                 <X size={20} />
               </button>
-              
+
               <h2 className="font-playfair text-2xl text-stone-800 mb-6">Editar Publicación</h2>
               <form onSubmit={handleEditPostSubmit} className="space-y-4">
                 <div>
@@ -900,6 +1093,102 @@ export const CoachView: React.FC<CoachViewProps> = ({ user, onLogout }) => {
               </form>
             </motion.div>
           </div>
+        )}
+        )
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {templateToEdit && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-stone-900/40 backdrop-blur-sm"
+              onClick={() => setTemplateToEdit(null)}
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative w-full max-w-2xl bg-white rounded-3xl shadow-xl p-8"
+            >
+              <button
+                onClick={() => setTemplateToEdit(null)}
+                className="absolute top-4 right-4 p-2 bg-white/80 backdrop-blur-md rounded-full text-stone-600 hover:text-stone-900 hover:bg-stone-100 z-10 transition-colors shadow-sm"
+              >
+                <X size={20} />
+              </button>
+
+              <h2 className="font-playfair text-2xl text-stone-800 mb-6">Editar Plantilla</h2>
+              <form onSubmit={handleEditTemplateSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-stone-600 mb-1.5 font-outfit">Nombre del Hábito</label>
+                  <input
+                    type="text"
+                    value={editTemplateName}
+                    onChange={(e) => setEditTemplateName(e.target.value)}
+                    required
+                    className="w-full px-4 py-2.5 rounded-xl border border-stone-200 bg-stone-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-stone-200 font-outfit text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-stone-600 mb-1.5 font-outfit">Descripción</label>
+                  <input
+                    type="text"
+                    value={editTemplateDesc}
+                    onChange={(e) => setEditTemplateDesc(e.target.value)}
+                    className="w-full px-4 py-2.5 rounded-xl border border-stone-200 bg-stone-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-stone-200 font-outfit text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-stone-600 mb-1.5 font-outfit">Color</label>
+                  <div className="flex gap-2">
+                    {(Object.keys(colorStyles) as HabitColor[]).map((c) => (
+                      <button
+                        key={c}
+                        type="button"
+                        onClick={() => setEditTemplateColor(c)}
+                        className={`w-8 h-8 rounded-full ${colorStyles[c].checkedBg} transition-transform ${editTemplateColor === c ? 'ring-2 ring-offset-2 ring-stone-800 scale-110' : 'hover:scale-110'}`}
+                        title={`Color ${c}`}
+                      />
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex justify-end pt-4 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setTemplateToEdit(null)}
+                    className="px-6 py-2.5 rounded-xl bg-stone-100 text-stone-600 font-outfit font-medium transition-colors hover:bg-stone-200"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={!editTemplateName.trim()}
+                    className="px-6 py-2.5 rounded-xl bg-stone-800 text-white font-outfit font-medium transition-colors hover:bg-stone-700 disabled:opacity-50"
+                  >
+                    Guardar Cambios
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {toastMessage && (
+          <motion.div
+            initial={{ opacity: 0, y: 50, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 50, scale: 0.9 }}
+            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] bg-emerald-500 text-white px-6 py-3 rounded-full shadow-lg font-outfit font-medium flex items-center gap-2"
+          >
+            <Check size={18} />
+            <span>{toastMessage}</span>
+          </motion.div>
         )}
       </AnimatePresence>
     </div>

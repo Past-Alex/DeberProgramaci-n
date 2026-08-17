@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useEffect } from 'react';
-import { BlogPost, Habit, HabitColor, User, HabitTemplate } from './types';
+import { BlogPost, Habit, HabitColor, User, HabitTemplate, ReactionType } from './types';
 import { HabitCard } from './components/HabitCard';
 import { AddHabitModal } from './components/AddHabitModal';
 import { EditHabitModal } from './components/EditHabitModal';
@@ -10,7 +10,7 @@ import LoginPage from './app/login/page';
 import { CoachView } from './components/CoachView';
 import { ConfirmModal } from './components/ConfirmModal';
 import { MotivationalToast } from './components/MotivationalToast';
-import { getToday, colorStyles, DEFAULT_BLOG_POSTS } from './utils';
+import { getToday, colorStyles, DEFAULT_BLOG_POSTS, playLikeSound, REACTIONS, parseUserReaction, getReactionsCount } from './utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, Sparkles, LayoutDashboard, ListTodo, BarChart3, LogOut, Download, BookOpen, Heart, Image as ImageIcon, UploadCloud, X, Trash2, UserCircle, Globe, Check } from 'lucide-react';
 import Link from 'next/link';
@@ -43,6 +43,7 @@ export default function App({ initialUser }: { initialUser: User }) {
   const [editPostTitle, setEditPostTitle] = useState('');
   const [editPostContent, setEditPostContent] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [logoutConfirm, setLogoutConfirm] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -249,16 +250,19 @@ export default function App({ initialUser }: { initialUser: User }) {
   const handleAddPost = async (e: React.FormEvent) => {
     e.preventDefault();
     if (postTitle.trim() && postContent.trim()) {
-      const UNSPLASH_IMAGES = [
-        'https://images.unsplash.com/photo-1517842645767-c639042777db?q=80&w=800&auto=format&fit=crop',
-        'https://images.unsplash.com/photo-1544947950-fa07a98d237f?q=80&w=800&auto=format&fit=crop',
-        'https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?q=80&w=800&auto=format&fit=crop',
-        'https://images.unsplash.com/photo-1476480862126-209bfaa8edc8?q=80&w=800&auto=format&fit=crop',
-        'https://images.unsplash.com/photo-1490645935967-10de6ba17061?q=80&w=800&auto=format&fit=crop',
-        'https://images.unsplash.com/photo-1472396961693-142e6e269027?q=80&w=800&auto=format&fit=crop'
-      ];
-      
-      const imageToUse = postImage || UNSPLASH_IMAGES[Math.floor(Math.random() * UNSPLASH_IMAGES.length)];
+      let imageToUse = postImage;
+      if (!imageToUse) {
+        try {
+          const res = await fetch('https://random.imagecdn.app/v1/image?width=800&height=600&category=nature&format=json');
+          if (res.ok) {
+            const data = await res.json();
+            imageToUse = data.url;
+          }
+        } catch (error) {
+          console.error('Error fetching random image:', error);
+          imageToUse = 'https://images.unsplash.com/photo-1517842645767-c639042777db?q=80&w=800&auto=format&fit=crop';
+        }
+      }
       
       const newPostData = {
         title: postTitle.trim(),
@@ -287,6 +291,7 @@ export default function App({ initialUser }: { initialUser: User }) {
           imageUrl: data.image_url
         };
         setBlogPosts([newPost, ...blogPosts]);
+        setToastMessage('Post correctamente publicado');
       }
       
       setPostTitle('');
@@ -321,17 +326,27 @@ export default function App({ initialUser }: { initialUser: User }) {
     }
   };
 
-  const handleLikePost = async (postId: string) => {
+  const handleLikePost = async (postId: string, reactionType: ReactionType = 'like') => {
     const post = blogPosts.find(p => p.id === postId);
     if (!post) return;
     
     const currentLikedBy = post.likedBy || [];
-    const hasLiked = currentLikedBy.includes(currentUser.id);
+    const existingReaction = parseUserReaction(currentLikedBy, currentUser.id);
     
-    const newLikes = hasLiked ? Math.max(0, post.likes - 1) : post.likes + 1;
-    const newLikedBy = hasLiked 
-      ? currentLikedBy.filter(id => id !== currentUser.id)
-      : [...currentLikedBy, currentUser.id];
+    let newLikedBy = currentLikedBy.filter(item => {
+      if (item === currentUser.id) return false;
+      if (item.startsWith(`${currentUser.id}:`)) return false;
+      return true;
+    });
+
+    if (existingReaction === reactionType) {
+      // Toggle off
+    } else {
+      newLikedBy.push(`${currentUser.id}:${reactionType}`);
+      playLikeSound();
+    }
+    
+    const newLikes = newLikedBy.length;
       
     await supabase.from('blog_posts').update({ likes: newLikes, liked_by: newLikedBy }).eq('id', postId);
 
@@ -427,7 +442,7 @@ export default function App({ initialUser }: { initialUser: User }) {
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ delay: 0.2 }}
-              onClick={handleLogout}
+              onClick={() => setLogoutConfirm(true)}
               className="p-3 bg-white border border-stone-200 text-stone-400 hover:text-stone-700 rounded-full transition-all hover:shadow-sm"
               title="Cerrar sesión"
             >
@@ -716,7 +731,9 @@ export default function App({ initialUser }: { initialUser: User }) {
                   ) : (
                     <div className="flex flex-col gap-6">
                       {blogPosts.map(post => {
-                        const hasLiked = (post.likedBy || []).includes(currentUser.id);
+                        const userReaction = parseUserReaction(post.likedBy || [], currentUser.id);
+                        const totalReactions = (post.likedBy || []).length;
+                        const currentReactionConfig = userReaction ? REACTIONS.find(r => r.type === userReaction) : null;
                         return (
                         <motion.div 
                           key={post.id}
@@ -772,17 +789,46 @@ export default function App({ initialUser }: { initialUser: User }) {
                               Leer artículo completo →
                             </button>
                             
-                            <div className="mt-2 flex items-center">
+                            <div className="relative group/reaction mt-2 flex items-center">
+                              {/* Hover Menu */}
+                              <div className="absolute bottom-full left-0 mb-2 hidden group-hover/reaction:flex bg-white rounded-full shadow-lg border border-stone-100 p-1.5 gap-1 transform transition-all z-10">
+                                {/* Bridge for hover gap */}
+                                <div className="absolute top-full left-0 w-full h-2" />
+                                {REACTIONS.map(reaction => (
+                                  <button
+                                    key={reaction.type}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleLikePost(post.id, reaction.type);
+                                    }}
+                                    className="w-10 h-10 hover:scale-125 transition-transform duration-200 transform origin-bottom flex items-center justify-center text-2xl relative group/tooltip"
+                                  >
+                                    {reaction.emoji}
+                                    <span className="absolute -top-8 bg-stone-800 text-white text-[10px] px-2 py-1 rounded-full opacity-0 group-hover/tooltip:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
+                                      {reaction.label}
+                                    </span>
+                                  </button>
+                                ))}
+                              </div>
+
+                              {/* Main Button */}
                               <button
-                                onClick={() => handleLikePost(post.id)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleLikePost(post.id, userReaction ? userReaction : 'like');
+                                }}
                                 className={`flex items-center gap-2 px-4 py-2 rounded-full border transition-colors font-outfit text-sm font-medium ${
-                                  hasLiked 
-                                    ? 'border-rose-200 bg-rose-50 text-rose-500' 
-                                    : 'border-stone-200 text-stone-500 hover:text-rose-500 hover:border-rose-200 hover:bg-rose-50'
+                                  userReaction 
+                                    ? `border-${currentReactionConfig?.color.replace('text-', '')}/30 ${currentReactionConfig?.bg} ${currentReactionConfig?.color}` 
+                                    : 'border-stone-200 text-stone-500 hover:text-stone-700 hover:bg-stone-50'
                                 }`}
                               >
-                                <Heart size={16} className={hasLiked ? "fill-current text-rose-500" : ""} />
-                                <span>{post.likes} {post.likes === 1 ? 'Me gusta' : 'Me gusta'}</span>
+                                {userReaction ? (
+                                  <span className="text-lg leading-none">{currentReactionConfig?.emoji}</span>
+                                ) : (
+                                  <Heart size={16} />
+                                )}
+                                <span>{totalReactions} {totalReactions === 1 ? 'Reacción' : 'Reacciones'}</span>
                               </button>
                             </div>
                           </div>
@@ -926,18 +972,48 @@ export default function App({ initialUser }: { initialUser: User }) {
                   {selectedPost.content}
                 </p>
                 
-                <div className="mt-4 flex items-center">
-                  <button
-                    onClick={() => handleLikePost(selectedPost.id)}
-                    className={`flex items-center gap-2 px-6 py-3 rounded-full border transition-colors font-outfit font-medium ${
-                      (selectedPost.likedBy || []).includes(currentUser?.id || '')
-                        ? 'border-rose-200 bg-rose-50 text-rose-500' 
-                        : 'border-stone-200 text-stone-500 hover:text-rose-500 hover:border-rose-200 hover:bg-rose-50'
-                    }`}
-                  >
-                    <Heart size={20} className={(selectedPost.likedBy || []).includes(currentUser?.id || '') ? "fill-current text-rose-500" : ""} />
-                    <span>{(selectedPost.likes || 0)} {selectedPost.likes === 1 ? 'Me gusta' : 'Me gusta'}</span>
-                  </button>
+                <div className="relative group/reaction mt-4 flex items-center">
+                  {(() => {
+                    const userReactionModal = parseUserReaction(selectedPost.likedBy || [], currentUser.id);
+                    const totalReactionsModal = (selectedPost.likedBy || []).length;
+                    const currentReactionConfigModal = userReactionModal ? REACTIONS.find(r => r.type === userReactionModal) : null;
+                    return (
+                      <>
+                        <div className="absolute bottom-full left-0 mb-2 hidden group-hover/reaction:flex bg-white rounded-full shadow-lg border border-stone-100 p-1.5 gap-1 transform transition-all z-10">
+                          {/* Bridge for hover gap */}
+                          <div className="absolute top-full left-0 w-full h-2" />
+                          {REACTIONS.map(reaction => (
+                            <button
+                              key={reaction.type}
+                              onClick={() => handleLikePost(selectedPost.id, reaction.type)}
+                              className="w-10 h-10 hover:scale-125 transition-transform duration-200 transform origin-bottom flex items-center justify-center text-2xl relative group/tooltip"
+                            >
+                              {reaction.emoji}
+                              <span className="absolute -top-8 bg-stone-800 text-white text-[10px] px-2 py-1 rounded-full opacity-0 group-hover/tooltip:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
+                                {reaction.label}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+
+                        <button
+                          onClick={() => handleLikePost(selectedPost.id, userReactionModal ? userReactionModal : 'like')}
+                          className={`flex items-center gap-2 px-6 py-3 rounded-full border transition-colors font-outfit font-medium ${
+                            userReactionModal 
+                              ? `border-${currentReactionConfigModal?.color.replace('text-', '')}/30 ${currentReactionConfigModal?.bg} ${currentReactionConfigModal?.color}` 
+                              : 'border-stone-200 text-stone-500 hover:text-stone-700 hover:bg-stone-50'
+                          }`}
+                        >
+                          {userReactionModal ? (
+                            <span className="text-xl leading-none">{currentReactionConfigModal?.emoji}</span>
+                          ) : (
+                            <Heart size={20} />
+                          )}
+                          <span>{totalReactionsModal} {totalReactionsModal === 1 ? 'Reacción' : 'Reacciones'}</span>
+                        </button>
+                      </>
+                    );
+                  })()}
                 </div>
 
                 <div className="w-full h-px bg-stone-100 my-2" />
@@ -1010,6 +1086,17 @@ export default function App({ initialUser }: { initialUser: User }) {
         message="¿Estás seguro de que quieres eliminar esta publicación de la comunidad? Esta acción no se puede deshacer."
         onClose={() => setPostToDelete(null)}
         onConfirm={() => postToDelete && handleDeletePost(postToDelete)}
+      />
+
+      <ConfirmModal
+        isOpen={logoutConfirm}
+        title="Cerrar sesión"
+        message="¿Estás seguro de que deseas cerrar sesión?"
+        onClose={() => setLogoutConfirm(false)}
+        onConfirm={() => {
+          setLogoutConfirm(false);
+          handleLogout();
+        }}
       />
 
       <AnimatePresence>

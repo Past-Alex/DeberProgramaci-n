@@ -31,6 +31,8 @@ export interface Comment {
   date: string;
 }
 
+export type ReactionType = 'like' | 'love' | 'haha' | 'wow' | 'sad' | 'angry';
+
 export interface BlogPost {
   id: string;
   title: string;

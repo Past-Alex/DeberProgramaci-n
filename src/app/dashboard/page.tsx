@@ -18,6 +18,11 @@ export default async function DashboardPage() {
     .eq('id', user.id)
     .single()
 
+  if (!profile) {
+    await supabase.auth.signOut()
+    redirect('/login?error=account_deleted')
+  }
+
   const userData: User = {
     id: user.id,
     name: profile?.name || user.email?.split('@')[0] || 'Usuario',

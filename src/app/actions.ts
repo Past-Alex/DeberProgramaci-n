@@ -121,3 +121,25 @@ export async function updateProfileName(formData: FormData) {
   revalidatePath('/perfil');
   revalidatePath('/dashboard');
 }
+
+export async function updateAdoptedHabits(oldName: string, newName: string, newColor: string) {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) {
+    throw new Error('Not authenticated');
+  }
+
+  const { error } = await supabase
+    .from('habits')
+    .update({ name: newName, color: newColor })
+    .eq('name', oldName);
+
+  if (error) {
+    throw new Error('Failed to update adopted habits: ' + error.message);
+  }
+
+  // Refresh dashboard and explorar to reflect new colors/names
+  revalidatePath('/dashboard');
+  revalidatePath('/explorar');
+}
