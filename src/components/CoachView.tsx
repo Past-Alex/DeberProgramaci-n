@@ -769,47 +769,76 @@ export const CoachView: React.FC<CoachViewProps> = ({ user, onLogout }) => {
                           >
                             Leer artículo completo →
                           </button>
-                          <div className="relative group/reaction mt-2 flex items-center">
-                            {/* Hover Menu */}
-                            <div className="absolute bottom-full left-0 mb-2 hidden group-hover/reaction:flex bg-white rounded-full shadow-lg border border-stone-100 p-1.5 gap-1 transform transition-all z-10">
-                              {/* Bridge for hover gap */}
-                              <div className="absolute top-full left-0 w-full h-2" />
-                              {REACTIONS.map(reaction => (
-                                <button
-                                  key={reaction.type}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleLikePost(post.id, reaction.type);
-                                  }}
-                                  className="w-10 h-10 hover:scale-125 transition-transform duration-200 transform origin-bottom flex items-center justify-center text-2xl relative group/tooltip"
-                                >
-                                  {reaction.emoji}
-                                  <span className="absolute -top-8 bg-stone-800 text-white text-[10px] px-2 py-1 rounded-full opacity-0 group-hover/tooltip:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
-                                    {reaction.label}
-                                  </span>
-                                </button>
-                              ))}
-                            </div>
+                          <div className="flex flex-col mt-2">
+                            {(() => {
+                              const reactionCounts = getReactionsCount(post.likedBy || []);
+                              const topReactions = (Object.entries(reactionCounts) as [ReactionType, number][])
+                                .filter(([_, count]) => count > 0)
+                                .sort((a, b) => b[1] - a[1])
+                                .slice(0, 3)
+                                .map(([type]) => type);
+                              
+                              if (topReactions.length === 0) return null;
 
-                            {/* Main Button */}
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleLikePost(post.id, userReaction ? userReaction : 'like');
-                              }}
-                              className={`flex items-center gap-2 px-4 py-2 rounded-full border transition-colors font-outfit text-sm font-medium ${
-                                userReaction 
-                                  ? `border-${currentReactionConfig?.color.replace('text-', '')}/30 ${currentReactionConfig?.bg} ${currentReactionConfig?.color}` 
-                                  : 'border-stone-200 text-stone-500 hover:text-stone-700 hover:bg-stone-50'
-                              }`}
-                            >
-                              {userReaction ? (
-                                <span className="text-lg leading-none">{currentReactionConfig?.emoji}</span>
-                              ) : (
-                                <Heart size={16} />
-                              )}
-                              <span>{totalReactions} {totalReactions === 1 ? 'Reacción' : 'Reacciones'}</span>
-                            </button>
+                              return (
+                                <div className="flex items-center gap-1.5 mb-2 ml-1">
+                                  <div className="flex items-center -space-x-1">
+                                    {topReactions.map((type, i) => {
+                                      const rConf = REACTIONS.find(r => r.type === type);
+                                      return (
+                                        <div key={type} className="w-5 h-5 rounded-full bg-stone-50 border border-white shadow-sm flex items-center justify-center text-[10px]" style={{ zIndex: 3 - i }}>
+                                          {rConf?.emoji}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                  <span className="text-xs text-stone-500 font-outfit hover:underline cursor-pointer">{totalReactions}</span>
+                                </div>
+                              );
+                            })()}
+
+                            <div className="relative group/reaction flex items-center">
+                              {/* Hover Menu */}
+                              <div className="absolute bottom-full left-0 mb-2 hidden group-hover/reaction:flex bg-white rounded-full shadow-lg border border-stone-100 p-1.5 gap-1 transform transition-all z-10">
+                                {/* Bridge for hover gap */}
+                                <div className="absolute top-full left-0 w-full h-2" />
+                                {REACTIONS.map(reaction => (
+                                  <button
+                                    key={reaction.type}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleLikePost(post.id, reaction.type);
+                                    }}
+                                    className="w-10 h-10 hover:scale-125 transition-transform duration-200 transform origin-bottom flex items-center justify-center text-2xl relative group/tooltip"
+                                  >
+                                    {reaction.emoji}
+                                    <span className="absolute -top-8 bg-stone-800 text-white text-[10px] px-2 py-1 rounded-full opacity-0 group-hover/tooltip:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
+                                      {reaction.label}
+                                    </span>
+                                  </button>
+                                ))}
+                              </div>
+
+                              {/* Main Button */}
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleLikePost(post.id, userReaction ? userReaction : 'like');
+                                }}
+                                className={`flex items-center gap-2 px-4 py-2 rounded-full border transition-colors font-outfit text-sm font-medium ${
+                                  userReaction 
+                                    ? `border-${currentReactionConfig?.color.replace('text-', '')}/30 ${currentReactionConfig?.bg} ${currentReactionConfig?.color}` 
+                                    : 'border-stone-200 text-stone-500 hover:text-stone-700 hover:bg-stone-50'
+                                }`}
+                              >
+                                {userReaction ? (
+                                  <span className="text-lg leading-none">{currentReactionConfig?.emoji}</span>
+                                ) : (
+                                  <Heart size={16} />
+                                )}
+                                <span>{userReaction ? currentReactionConfig?.label : 'Me gusta'}</span>
+                              </button>
+                            </div>
                           </div>
                         </div>
                       </motion.div>
@@ -892,48 +921,76 @@ export const CoachView: React.FC<CoachViewProps> = ({ user, onLogout }) => {
                   {selectedPost.content}
                 </p>
 
-                <div className="relative group/reaction mt-4 flex items-center">
+                <div className="flex flex-col mt-4">
                   {(() => {
-                    const userReactionModal = parseUserReaction(selectedPost.likedBy || [], user.id);
-                    const totalReactionsModal = (selectedPost.likedBy || []).length;
-                    const currentReactionConfigModal = userReactionModal ? REACTIONS.find(r => r.type === userReactionModal) : null;
-                    return (
-                      <>
-                        <div className="absolute bottom-full left-0 mb-2 hidden group-hover/reaction:flex bg-white rounded-full shadow-lg border border-stone-100 p-1.5 gap-1 transform transition-all z-10">
-                          {/* Bridge for hover gap */}
-                          <div className="absolute top-full left-0 w-full h-2" />
-                          {REACTIONS.map(reaction => (
-                            <button
-                              key={reaction.type}
-                              onClick={() => handleLikePost(selectedPost.id, reaction.type)}
-                              className="w-10 h-10 hover:scale-125 transition-transform duration-200 transform origin-bottom flex items-center justify-center text-2xl relative group/tooltip"
-                            >
-                              {reaction.emoji}
-                              <span className="absolute -top-8 bg-stone-800 text-white text-[10px] px-2 py-1 rounded-full opacity-0 group-hover/tooltip:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
-                                {reaction.label}
-                              </span>
-                            </button>
-                          ))}
-                        </div>
+                    const reactionCounts = getReactionsCount(selectedPost.likedBy || []);
+                    const topReactions = (Object.entries(reactionCounts) as [ReactionType, number][])
+                      .filter(([_, count]) => count > 0)
+                      .sort((a, b) => b[1] - a[1])
+                      .slice(0, 3)
+                      .map(([type]) => type);
+                    
+                    if (topReactions.length === 0) return null;
 
-                        <button
-                          onClick={() => handleLikePost(selectedPost.id, userReactionModal ? userReactionModal : 'like')}
-                          className={`flex items-center gap-2 px-6 py-3 rounded-full border transition-colors font-outfit font-medium ${
-                            userReactionModal 
-                              ? `border-${currentReactionConfigModal?.color.replace('text-', '')}/30 ${currentReactionConfigModal?.bg} ${currentReactionConfigModal?.color}` 
-                              : 'border-stone-200 text-stone-500 hover:text-stone-700 hover:bg-stone-50'
-                          }`}
-                        >
-                          {userReactionModal ? (
-                            <span className="text-xl leading-none">{currentReactionConfigModal?.emoji}</span>
-                          ) : (
-                            <Heart size={20} />
-                          )}
-                          <span>{totalReactionsModal} {totalReactionsModal === 1 ? 'Reacción' : 'Reacciones'}</span>
-                        </button>
-                      </>
+                    return (
+                      <div className="flex items-center gap-1.5 mb-2 ml-1">
+                        <div className="flex items-center -space-x-1">
+                          {topReactions.map((type, i) => {
+                            const rConf = REACTIONS.find(r => r.type === type);
+                            return (
+                              <div key={type} className="w-5 h-5 rounded-full bg-stone-50 border border-white shadow-sm flex items-center justify-center text-[10px]" style={{ zIndex: 3 - i }}>
+                                {rConf?.emoji}
+                              </div>
+                            );
+                          })}
+                        </div>
+                        <span className="text-xs text-stone-500 font-outfit hover:underline cursor-pointer">{(selectedPost.likedBy || []).length}</span>
+                      </div>
                     );
                   })()}
+
+                  <div className="relative group/reaction flex items-center">
+                    {(() => {
+                      const userReactionModal = parseUserReaction(selectedPost.likedBy || [], user.id);
+                      const currentReactionConfigModal = userReactionModal ? REACTIONS.find(r => r.type === userReactionModal) : null;
+                      return (
+                        <>
+                          <div className="absolute bottom-full left-0 mb-2 hidden group-hover/reaction:flex bg-white rounded-full shadow-lg border border-stone-100 p-1.5 gap-1 transform transition-all z-10">
+                            {/* Bridge for hover gap */}
+                            <div className="absolute top-full left-0 w-full h-2" />
+                            {REACTIONS.map(reaction => (
+                              <button
+                                key={reaction.type}
+                                onClick={() => handleLikePost(selectedPost.id, reaction.type)}
+                                className="w-10 h-10 hover:scale-125 transition-transform duration-200 transform origin-bottom flex items-center justify-center text-2xl relative group/tooltip"
+                              >
+                                {reaction.emoji}
+                                <span className="absolute -top-8 bg-stone-800 text-white text-[10px] px-2 py-1 rounded-full opacity-0 group-hover/tooltip:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
+                                  {reaction.label}
+                                </span>
+                              </button>
+                            ))}
+                          </div>
+
+                          <button
+                            onClick={() => handleLikePost(selectedPost.id, userReactionModal ? userReactionModal : 'like')}
+                            className={`flex items-center gap-2 px-6 py-3 rounded-full border transition-colors font-outfit font-medium ${
+                              userReactionModal 
+                                ? `border-${currentReactionConfigModal?.color.replace('text-', '')}/30 ${currentReactionConfigModal?.bg} ${currentReactionConfigModal?.color}` 
+                                : 'border-stone-200 text-stone-500 hover:text-stone-700 hover:bg-stone-50'
+                            }`}
+                          >
+                            {userReactionModal ? (
+                              <span className="text-xl leading-none">{currentReactionConfigModal?.emoji}</span>
+                            ) : (
+                              <Heart size={20} />
+                            )}
+                            <span>{userReactionModal ? currentReactionConfigModal?.label : 'Me gusta'}</span>
+                          </button>
+                        </>
+                      );
+                    })()}
+                  </div>
                 </div>
 
                 <div className="w-full h-px bg-stone-100 my-2" />
