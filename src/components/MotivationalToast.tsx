@@ -15,23 +15,35 @@ const MOTIVATIONAL_QUOTES = [
   "Un hábito a la vez, transformando tu vida."
 ];
 
-export const MotivationalToast: React.FC = () => {
-  const [quote, setQuote] = useState<string | null>(null);
+interface Props {
+  externalQuote?: { text: string; author: string } | null;
+}
+
+export const MotivationalToast: React.FC<Props> = ({ externalQuote }) => {
+  const [quote, setQuote] = useState<{ text: string, author?: string } | null>(null);
 
   useEffect(() => {
-    // Show a motivational quote every 2 minutes (120000 ms)
+    // Si tenemos una quote externa, la mostramos inmediatamente (1 vez por sesión)
+    if (externalQuote) {
+      setTimeout(() => {
+        setQuote(externalQuote);
+        setTimeout(() => setQuote(null), 10000); // Ocultar después de 10s
+      }, 1000);
+    }
+
+    // Show a local motivational quote every 2 minutes (120000 ms)
     const intervalId = setInterval(() => {
       const randomQuote = MOTIVATIONAL_QUOTES[Math.floor(Math.random() * MOTIVATIONAL_QUOTES.length)];
-      setQuote(randomQuote);
+      setQuote({ text: randomQuote });
 
       // Hide it automatically after 8 seconds
       setTimeout(() => {
-        setQuote((currentQuote) => currentQuote === randomQuote ? null : currentQuote);
+        setQuote((currentQuote) => currentQuote?.text === randomQuote ? null : currentQuote);
       }, 8000);
     }, 120000);
 
     return () => clearInterval(intervalId);
-  }, []);
+  }, [externalQuote]);
 
   return (
     <AnimatePresence>
@@ -47,7 +59,8 @@ export const MotivationalToast: React.FC = () => {
           </div>
           <div>
             <p className="font-semibold text-sm mb-0.5">Mensaje para ti</p>
-            <p className="text-stone-500 text-sm leading-relaxed">{quote}</p>
+            <p className="text-stone-500 text-sm leading-relaxed italic">"{quote.text}"</p>
+            {quote.author && <p className="text-stone-400 text-xs mt-1 text-right">— {quote.author}</p>}
           </div>
           <button 
             onClick={() => setQuote(null)}

@@ -9,16 +9,13 @@ export default async function HabitoPage({ params }: { params: { id: string } })
   const supabase = createClient();
   const { data: { user }, error } = await supabase.auth.getUser();
 
-  if (error || !user) {
-    redirect('/login');
-  }
+  // No redirigimos si no hay usuario, permitimos que cualquier visitante vea el detalle (Requerimiento 2.5.2)
 
   // Fetch habit
   const { data: habit, error: habitError } = await supabase
     .from('habits')
     .select('*')
     .eq('id', params.id)
-    .eq('user_id', user.id) // Ensures they own the habit
     .single();
 
   if (habitError || !habit) {

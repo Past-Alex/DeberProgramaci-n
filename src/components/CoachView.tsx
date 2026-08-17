@@ -388,7 +388,7 @@ export const CoachView: React.FC<CoachViewProps> = ({ user, onLogout }) => {
 
   return (
     <div className="min-h-screen bg-[#FDFCF8] selection:bg-stone-200">
-      <div className="max-w-5xl mx-auto px-5 py-12 md:py-20">
+      <div className="max-w-5xl mx-auto px-5 pt-6 pb-28 md:py-20">
 
         {/* Header */}
         <header className="mb-10 flex flex-col md:flex-row md:items-end justify-between gap-6">
@@ -424,8 +424,8 @@ export const CoachView: React.FC<CoachViewProps> = ({ user, onLogout }) => {
           </motion.button>
         </header>
 
-        {/* Navigation */}
-        <nav className="flex flex-wrap gap-2 mb-10 p-1.5 bg-stone-100/50 rounded-2xl w-fit">
+        {/* Desktop Navigation */}
+        <nav className="hidden md:flex flex-wrap gap-2 mb-10 p-1.5 bg-stone-100/50 rounded-2xl w-fit">
           <button
             onClick={() => setActiveTab('templates')}
             className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-outfit font-medium transition-all ${activeTab === 'templates' ? 'bg-white text-stone-800 shadow-sm' : 'text-stone-500 hover:text-stone-700 hover:bg-stone-100/50'
@@ -1038,6 +1038,22 @@ export const CoachView: React.FC<CoachViewProps> = ({ user, onLogout }) => {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Mobile Bottom Navigation (Coach) */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-md border-t border-stone-200 z-40 px-6 py-2 flex justify-around items-center shadow-[0_-4px_20px_-10px_rgba(0,0,0,0.05)] pb-[calc(env(safe-area-inset-bottom,12px)+8px)]">
+        <button onClick={() => setActiveTab('templates')} className={`flex flex-col items-center gap-1 w-16 ${activeTab === 'templates' ? 'text-stone-900' : 'text-stone-400 hover:text-stone-600'}`}>
+          <Library size={24} className={activeTab === 'templates' ? 'fill-stone-100' : ''} />
+          <span className="text-[10px] font-outfit font-medium">Plantillas</span>
+        </button>
+        <button onClick={() => setActiveTab('students')} className={`flex flex-col items-center gap-1 w-16 ${activeTab === 'students' ? 'text-stone-900' : 'text-stone-400 hover:text-stone-600'}`}>
+          <Users size={24} className={activeTab === 'students' ? 'fill-stone-100' : ''} />
+          <span className="text-[10px] font-outfit font-medium">Alumnos</span>
+        </button>
+        <button onClick={() => setActiveTab('blog')} className={`flex flex-col items-center gap-1 w-16 ${activeTab === 'blog' ? 'text-stone-900' : 'text-stone-400 hover:text-stone-600'}`}>
+          <BookOpen size={24} className={activeTab === 'blog' ? 'fill-stone-100' : ''} />
+          <span className="text-[10px] font-outfit font-medium">Blog</span>
+        </button>
+      </nav>
     </div>
   );
 };

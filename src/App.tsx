@@ -19,7 +19,7 @@ import { createClient } from '@/utils/supabase/client';
 import { useRouter } from 'next/navigation';
 type Tab = 'today' | 'habits' | 'stats' | 'templates' | 'blog';
 
-export default function App({ initialUser }: { initialUser: User }) {
+export default function App({ initialUser, initialQuote }: { initialUser: User, initialQuote?: {text: string, author: string} | null }) {
   const [currentUser, setCurrentUser] = useState<User>(initialUser);
   const [habits, setHabits] = useState<Habit[]>([]);
   const [templates, setTemplates] = useState<HabitTemplate[]>([]);
@@ -406,7 +406,7 @@ export default function App({ initialUser }: { initialUser: User }) {
 
   return (
     <div className="min-h-screen bg-[#FDFCF8] selection:bg-stone-200">
-      <div className="max-w-5xl mx-auto px-5 py-12 md:py-20">
+      <div className="max-w-5xl mx-auto px-5 pt-6 pb-28 md:py-20">
         
         {/* Header */}
         <header className="mb-10 flex flex-col md:flex-row md:items-end justify-between gap-6">
@@ -462,8 +462,8 @@ export default function App({ initialUser }: { initialUser: User }) {
           </div>
         </header>
 
-        {/* Navigation */}
-        <nav className="flex flex-wrap gap-2 mb-10 p-1.5 bg-stone-100/50 rounded-2xl w-fit">
+        {/* Desktop Navigation */}
+        <nav className="hidden md:flex flex-wrap gap-2 mb-10 p-1.5 bg-stone-100/50 rounded-2xl w-fit">
           <button
             onClick={() => setActiveTab('today')}
             className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-outfit font-medium transition-all ${
@@ -701,7 +701,8 @@ export default function App({ initialUser }: { initialUser: User }) {
         )}
       </AnimatePresence>
 
-      <MotivationalToast />
+      {/* Daily Motivational Toast from API */}
+      <MotivationalToast externalQuote={initialQuote} />
 
       <AnimatePresence>
         {selectedPost && (
@@ -993,6 +994,35 @@ export default function App({ initialUser }: { initialUser: User }) {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Mobile Bottom Navigation (TikTok/Facebook style) */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-md border-t border-stone-200 z-40 px-6 py-2 flex justify-between items-center shadow-[0_-4px_20px_-10px_rgba(0,0,0,0.05)] pb-[calc(env(safe-area-inset-bottom,12px)+8px)]">
+        <button onClick={() => setActiveTab('today')} className={`flex flex-col items-center gap-1 w-12 ${activeTab === 'today' ? 'text-stone-900' : 'text-stone-400 hover:text-stone-600'}`}>
+          <LayoutDashboard size={24} className={activeTab === 'today' ? 'fill-stone-100' : ''} />
+          <span className="text-[10px] font-outfit font-medium">Hoy</span>
+        </button>
+        <button onClick={() => setActiveTab('habits')} className={`flex flex-col items-center gap-1 w-12 ${activeTab === 'habits' ? 'text-stone-900' : 'text-stone-400 hover:text-stone-600'}`}>
+          <ListTodo size={24} className={activeTab === 'habits' ? 'fill-stone-100' : ''} />
+          <span className="text-[10px] font-outfit font-medium">Hábitos</span>
+        </button>
+        
+        {/* Center Action Button */}
+        <button 
+          onClick={() => setIsModalOpen(true)} 
+          className="flex items-center justify-center w-14 h-14 bg-stone-900 text-white rounded-full shadow-lg -mt-8 hover:bg-stone-800 transition-transform active:scale-95"
+        >
+          <Plus size={28} />
+        </button>
+        
+        <button onClick={() => setActiveTab('stats')} className={`flex flex-col items-center gap-1 w-12 ${activeTab === 'stats' ? 'text-stone-900' : 'text-stone-400 hover:text-stone-600'}`}>
+          <BarChart3 size={24} className={activeTab === 'stats' ? 'fill-stone-100' : ''} />
+          <span className="text-[10px] font-outfit font-medium">Progreso</span>
+        </button>
+        <button onClick={() => setActiveTab('blog')} className={`flex flex-col items-center gap-1 w-12 ${activeTab === 'blog' ? 'text-stone-900' : 'text-stone-400 hover:text-stone-600'}`}>
+          <BookOpen size={24} className={activeTab === 'blog' ? 'fill-stone-100' : ''} />
+          <span className="text-[10px] font-outfit font-medium">Blog</span>
+        </button>
+      </nav>
     </div>
   );
 }

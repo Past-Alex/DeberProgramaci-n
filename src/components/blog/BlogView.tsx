@@ -26,6 +26,7 @@ export const BlogView: React.FC<BlogViewProps> = ({ currentUser }) => {
   const [isPublishing, setIsPublishing] = useState(false);
   const [postTitle, setPostTitle] = useState('');
   const [postContent, setPostContent] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
   const [postImage, setPostImage] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState(false);
   
@@ -149,6 +150,19 @@ export const BlogView: React.FC<BlogViewProps> = ({ currentUser }) => {
         </button>
       </div>
       
+      <div className="mb-6">
+        <div className="relative">
+          <input 
+            type="text" 
+            placeholder="Buscar publicaciones por título o contenido..." 
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-11 pr-4 py-3 rounded-2xl border border-stone-200 focus:outline-none focus:ring-2 focus:ring-stone-400 font-outfit text-stone-800 bg-white shadow-sm"
+          />
+          <svg className="w-5 h-5 absolute left-4 top-3.5 text-stone-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+        </div>
+      </div>
+      
       <AnimatePresence>
         {isPublishing && (
           <motion.div
@@ -264,12 +278,15 @@ export const BlogView: React.FC<BlogViewProps> = ({ currentUser }) => {
         </div>
       ) : (
         <div className="flex flex-col gap-6">
-          {blogPosts.map(post => (
+          {blogPosts.filter(post => 
+            post.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
+            post.content.toLowerCase().includes(searchQuery.toLowerCase())
+          ).map(post => (
             <BlogPostCard 
               key={post.id} 
               post={post}
               currentUserId={currentUser.id}
-              isAuthor={currentUser.id === post.author_id}
+              isAuthor={currentUser.id === post.author_id || currentUser.role === 'coach'}
               onLike={(postId, type) => {
                 likePost(postId, currentUser.id, type);
                 if (selectedPost && selectedPost.id === postId) {
@@ -343,7 +360,7 @@ export const BlogView: React.FC<BlogViewProps> = ({ currentUser }) => {
                         <span>{selectedPost.date}</span>
                       </div>
                     </div>
-                    {currentUser.id === selectedPost.author_id && (
+                    {(currentUser.id === selectedPost.author_id || currentUser.role === 'coach') && (
                       <div className="flex gap-2">
                         <button 
                           onClick={() => { setEditPostTitle(selectedPost.title); setEditPostContent(selectedPost.content); setPostToEdit(selectedPost); setSelectedPost(null); }}
@@ -402,7 +419,7 @@ export const BlogView: React.FC<BlogViewProps> = ({ currentUser }) => {
                     <div className="flex flex-col gap-4">
                       {(selectedPost.comments || []).map((comment) => (
                         <div key={comment.id} className="flex flex-col p-4 bg-stone-50 rounded-2xl relative group/comment">
-                          {currentUser.id === comment.author_id && (
+                          {(currentUser.id === comment.author_id || currentUser.role === 'coach') && (
                             <button 
                               onClick={() => handleDeleteComment(selectedPost.id, comment.id)}
                               className="absolute top-4 right-4 text-stone-400 hover:text-red-500 opacity-0 group-hover/comment:opacity-100 transition-opacity"

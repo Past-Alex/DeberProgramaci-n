@@ -29,5 +29,25 @@ export default async function DashboardPage() {
     role: profile?.role || 'user'
   }
 
-  return <App initialUser={userData} />
+  // Requerimiento 2.7: Consumo de API Externa (desde un Server Component)
+  let externalQuote = null;
+  try {
+    // Usamos una API gratuita de citas para inspirar al usuario en sus hábitos
+    const res = await fetch('https://dummyjson.com/quotes/random', { cache: 'no-store' });
+    if (res.ok) {
+      const data = await res.json();
+      externalQuote = {
+        text: data.quote,
+        author: data.author
+      };
+    } else {
+      console.error("API response not OK:", res.status);
+    }
+  } catch (error) {
+    // Manejo básico de errores si la API falla o tarda
+    console.error("Error fetching external quote API:", error);
+  }
+
+  return <App initialUser={userData} initialQuote={externalQuote} />
 }
+
