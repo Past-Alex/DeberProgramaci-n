@@ -36,8 +36,20 @@ export default async function DashboardPage() {
     const res = await fetch('https://dummyjson.com/quotes/random', { cache: 'no-store' });
     if (res.ok) {
       const data = await res.json();
+      
+      // Traducir la cita al español
+      const translateRes = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(data.quote)}&langpair=en|es`);
+      let translatedText = data.quote;
+      
+      if (translateRes.ok) {
+        const translateData = await translateRes.json();
+        if (translateData.responseData && translateData.responseData.translatedText) {
+          translatedText = translateData.responseData.translatedText;
+        }
+      }
+
       externalQuote = {
-        text: data.quote,
+        text: translatedText,
         author: data.author
       };
     } else {
